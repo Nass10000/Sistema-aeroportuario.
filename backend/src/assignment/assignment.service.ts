@@ -4,12 +4,18 @@ import { Repository } from 'typeorm';
 import { Assignment } from './assignment.entity';
 import { CreateAssignmentDto } from '../dto/create-assignment.dto';
 import { UpdateAssignmentDto } from '../dto/update-assignment.dto';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationGateway } from '../notification/notification.gateway';
+import { NotificationType } from '../common/enums/roles.enum';
+import { User } from '../user/user.entity';
 
 @Injectable()
 export class AssignmentService {
   constructor(
     @InjectRepository(Assignment)
     private assignmentRepository: Repository<Assignment>,
+    private readonly notificationService: NotificationService,
+    private readonly notificationGateway: NotificationGateway,
   ) {}
 
   async create(createAssignmentDto: CreateAssignmentDto): Promise<Assignment> {
@@ -38,13 +44,37 @@ export class AssignmentService {
         throw new ConflictException('El usuario ya tiene una asignación en ese horario');
       }
       
-     const assignment = this.assignmentRepository.create({
-  ...createAssignmentDto,
-  user: { id: createAssignmentDto.userId },
-  operation: { id: createAssignmentDto.operationId },
-});
-return await this.assignmentRepository.save(assignment);
+      const assignment = this.assignmentRepository.create({
+        ...createAssignmentDto,
+        user: { id: createAssignmentDto.userId },
+        operation: { id: createAssignmentDto.operationId },
+      });
+      const savedAssignment = await this.assignmentRepository.save(assignment);
 
+      // Crear notificación para el empleado asignado
+      // Ajusta el sender según tu lógica de negocio, aquí se deja como el mismo usuario asignado
+      const user = await this.assignmentRepository.manager.findOne(User, { where: { id: createAssignmentDto.userId } });
+      if (!user) {
+        throw new NotFoundException(`Usuario con ID ${createAssignmentDto.userId} no encontrado`);
+      }
+      await this.notificationService.create(
+        'Nueva asignación',
+        'Tienes una nueva asignación programada.',
+        NotificationType.ASSIGNMENT,
+        user, // sender (puedes cambiar esto por el usuario que corresponda)
+        user, // recipient (User entity o al menos objeto con id)
+        undefined, // priority (opcional, usa el valor por defecto)
+        { assignmentId: savedAssignment.id }
+      );
+
+      // Emitir notificación en tiempo real (WebSocket)
+      this.notificationGateway.emitToUser(
+        createAssignmentDto.userId,
+        'new-assignment',
+        { assignmentId: savedAssignment.id }
+      );
+
+      return savedAssignment;
       
     } catch (error) {
       if (error instanceof BadRequestException || error instanceof ConflictException) {

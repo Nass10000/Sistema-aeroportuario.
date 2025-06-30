@@ -29,12 +29,12 @@ export class AssignmentController {
   }
 
   @Get()
-  @Roles(UserRole.PRESIDENT, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.EMPLOYEE, UserRole.ADMIN)
+  @Roles(UserRole.PRESIDENT, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.ADMIN) // Quitado UserRole.EMPLOYEE
   @ApiOperation({ summary: 'Obtener todas las asignaciones' })
   @ApiResponse({ status: 200, description: 'Lista de asignaciones', type: [Assignment] })
   async findAll() {
     const assignments = await this.assignmentService.findAll();
-console.log('👀 assignments con relaciones:', JSON.stringify(assignments, null, 2)); // <--- Agrega esto
+    console.log('👀 assignments con relaciones:', JSON.stringify(assignments, null, 2));
     return assignments.map(assignment => ({
       ...assignment,
       userId: assignment.user?.id,
@@ -43,7 +43,7 @@ console.log('👀 assignments con relaciones:', JSON.stringify(assignments, null
   }
 
   @Get(':id')
-  @Roles(UserRole.PRESIDENT, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.EMPLOYEE, UserRole.ADMIN)
+  @Roles(UserRole.PRESIDENT, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.ADMIN) // Quitado UserRole.EMPLOYEE
   @ApiOperation({ summary: 'Obtener asignación por ID' })
   @ApiParam({ name: 'id', description: 'ID de la asignación', type: 'number' })
   @ApiResponse({ status: 200, description: 'Asignación encontrada', type: Assignment })

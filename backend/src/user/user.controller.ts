@@ -91,7 +91,6 @@ export class UserController {
     return { message: 'Servidor funcionando correctamente', timestamp: new Date() };
   }
 }
-
 // Endpoint adicional fuera de la clase con guards para testing
 @Controller('auth-test')
 @ApiTags('Auth Test')
