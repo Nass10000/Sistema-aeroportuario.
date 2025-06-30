@@ -33,12 +33,10 @@ const SchedulingPage: React.FC = () => {
           id: 1,
           flightNumber: 'AA123',
           airline: 'American Airlines',
-          aircraftType: 'Boeing 737',
           origin: 'MIA',
           destination: 'JFK',
           operationType: 'departure',
           scheduledTime: '2024-01-15T10:00:00Z',
-          stationId: 1,
           status: 'scheduled'
         }
       ]);
@@ -129,7 +127,7 @@ const SchedulingPage: React.FC = () => {
               <option value="">Selecciona una operación</option>
               {operations.map((op) => (
                 <option key={op.id} value={op.id}>
-                  {op.flightNumber} - {op.airline} ({new Date(op.scheduledTime).toLocaleString()})
+                  {op.flightNumber} - {op.airline || 'N/A'} ({op.scheduledTime ? new Date(op.scheduledTime!).toLocaleString() : 'N/A'})
                 </option>
               ))}
             </select>
@@ -232,7 +230,7 @@ const SchedulingPage: React.FC = () => {
                 <option value="">Selecciona una operación</option>
                 {operations.map((op) => (
                   <option key={op.id} value={op.id}>
-                    {op.flightNumber} - {op.airline}
+                    {op.flightNumber} - {op.airline || 'N/A'}
                   </option>
                 ))}
               </select>
@@ -335,7 +333,7 @@ const SchedulingPage: React.FC = () => {
               <option value="">Selecciona una operación</option>
               {operations.map((op) => (
                 <option key={op.id} value={op.id}>
-                  {op.flightNumber} - {op.airline}
+                  {op.flightNumber} - {op.airline || 'N/A'}
                 </option>
               ))}
             </select>

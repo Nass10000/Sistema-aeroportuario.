@@ -195,8 +195,9 @@ export class UserService {
           throw new ConflictException('No tiene permisos para editar este usuario');
         }
         // No puede cambiar el stationId ni el rol
-        if ('stationId' in updateUserDto) {
+        if ('stationId' in updateUserDto || 'role' in updateUserDto) {
           delete updateUserDto.stationId;
+          delete updateUserDto.role;
         }
       }
 

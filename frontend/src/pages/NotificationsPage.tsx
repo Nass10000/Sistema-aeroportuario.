@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { notificationService, userService, type Notification, type User } from '../services/api';
+import { websocketService } from '../services/websocket';
 import MultiSelect from '../components/MultiSelect';
 
 const NotificationsPage: React.FC = () => {
@@ -25,7 +26,56 @@ const NotificationsPage: React.FC = () => {
   useEffect(() => {
     fetchNotifications();
     loadCurrentUser();
-    fetchUsers();
+    
+    // Solo cargar usuarios si el usuario puede crear notificaciones
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      const user = JSON.parse(userData);
+      if (['supervisor', 'manager', 'president', 'admin'].includes(user.role)) {
+        fetchUsers();
+      }
+    }
+    
+    // Conectar WebSocket si no está conectado
+    if (!websocketService.connected) {
+      websocketService.connect();
+    }
+
+    // Escuchar nuevas notificaciones
+    const handleNewNotification = (event: CustomEvent) => {
+      const newNotification = event.detail;
+      setNotifications(prev => [newNotification, ...prev]);
+    };
+
+    const handleNewAssignmentNotification = (event: CustomEvent) => {
+      const assignmentData = event.detail;
+      console.log('📋 Processing assignment notification:', assignmentData);
+      
+      // Crear una notificación de asignación en la lista con información detallada
+      const notification: Notification = {
+        id: assignmentData.assignmentId || Date.now(), // Usar el ID real de la asignación
+        userId: currentUser?.id || 0,
+        title: assignmentData.title || 'Nueva Asignación de Trabajo',
+        message: assignmentData.message || 'Se te ha asignado una nueva tarea',
+        type: 'info',
+        read: false,
+        createdAt: new Date().toISOString(),
+        metadata: assignmentData.metadata // Usar directamente la metadata del backend
+      };
+      
+      console.log('📋 Adding notification to list:', notification);
+      setNotifications(prev => [notification, ...prev]);
+    };
+
+    // Agregar event listeners
+    window.addEventListener('newNotification', handleNewNotification as EventListener);
+    window.addEventListener('newAssignmentNotification', handleNewAssignmentNotification as EventListener);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('newNotification', handleNewNotification as EventListener);
+      window.removeEventListener('newAssignmentNotification', handleNewAssignmentNotification as EventListener);
+    };
   }, []);
 
   const loadCurrentUser = () => {
@@ -59,7 +109,7 @@ const NotificationsPage: React.FC = () => {
           title: 'Nueva operación asignada',
           message: 'Se te ha asignado una nueva operación de vuelo AA123',
           type: 'info',
-          isRead: false,
+          read: false,
           createdAt: new Date().toISOString()
         },
         {
@@ -68,7 +118,7 @@ const NotificationsPage: React.FC = () => {
           title: 'Cambio de turno',
           message: 'Tu turno del martes ha sido reprogramado',
           type: 'warning',
-          isRead: true,
+          read: true,
           createdAt: new Date(Date.now() - 3600000).toISOString()
         }
       ]);
@@ -103,9 +153,7 @@ const NotificationsPage: React.FC = () => {
       await notificationService.createNotification({
         title: newNotification.title,
         message: newNotification.message,
-        type: newNotification.type,
-        recipientId: newNotification.recipientId.length > 0 ? parseInt(newNotification.recipientId[0].value) : undefined,
-        priority: newNotification.priority
+        type: newNotification.type as 'info' | 'success' | 'warning' | 'error'
       });
       setShowCreateForm(false);
       setNewNotification({
@@ -131,9 +179,9 @@ const NotificationsPage: React.FC = () => {
   const getFilteredNotifications = () => {
     switch (selectedFilter) {
       case 'unread':
-        return notifications.filter(n => !n.isRead);
+        return notifications.filter(n => !n.read);
       case 'read':
-        return notifications.filter(n => n.isRead);
+        return notifications.filter(n => n.read);
       default:
         return notifications;
     }
@@ -191,18 +239,26 @@ const NotificationsPage: React.FC = () => {
   }
 
   const filteredNotifications = getFilteredNotifications();
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white">Notificaciones</h1>
-          {unreadCount > 0 && (
-            <p className="text-gray-400 mt-1">
-              Tienes {unreadCount} notificación{unreadCount > 1 ? 'es' : ''} sin leer
-            </p>
-          )}
+          <div className="flex items-center space-x-4 mt-1">
+            {unreadCount > 0 && (
+              <p className="text-gray-400">
+                Tienes {unreadCount} notificación{unreadCount > 1 ? 'es' : ''} sin leer
+              </p>
+            )}
+            <div className="flex items-center space-x-2 text-sm">
+              <div className={`w-2 h-2 rounded-full ${websocketService.connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+              <span className="text-gray-400">
+                {websocketService.connected ? 'Tiempo real activo' : 'Desconectado'}
+              </span>
+            </div>
+          </div>
         </div>
         <div className="flex space-x-4">
           {canCreateNotifications() && (
@@ -280,9 +336,9 @@ const NotificationsPage: React.FC = () => {
             <div
               key={notification.id}
               className={`card cursor-pointer transition-all hover:bg-gray-700 ${
-                !notification.isRead ? 'border-l-4 border-blue-500 bg-gray-800' : ''
+                !notification.read ? 'border-l-4 border-blue-500 bg-gray-800' : ''
               }`}
-              onClick={() => !notification.isRead && handleMarkAsRead(notification.id)}
+              onClick={() => !notification.read && handleMarkAsRead(notification.id)}
             >
               <div className="flex items-start space-x-4">
                 <div className="flex-shrink-0 mt-1">
@@ -290,21 +346,79 @@ const NotificationsPage: React.FC = () => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <h3 className={`text-sm font-medium ${!notification.isRead ? 'text-white' : 'text-gray-300'}`}>
+                    <h3 className={`text-sm font-medium ${!notification.read ? 'text-white' : 'text-gray-300'}`}>
                       {notification.title}
                     </h3>
                     <div className="flex items-center space-x-2">
                       <span className="text-xs text-gray-400">
                         {formatTime(notification.createdAt)}
                       </span>
-                      {!notification.isRead && (
+                      {!notification.read && (
                         <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                       )}
                     </div>
                   </div>
-                  <p className={`text-sm ${!notification.isRead ? 'text-gray-300' : 'text-gray-400'} mt-1`}>
+                  <p className={`text-sm ${!notification.read ? 'text-gray-300' : 'text-gray-400'} mt-1`}>
                     {notification.message}
                   </p>
+                  
+                  {/* Mostrar información adicional para notificaciones de asignación */}
+                  {notification.metadata && (
+                    <div className="mt-3 p-3 bg-gray-700 rounded-lg border border-gray-600">
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        {notification.metadata.flightNumber && (
+                          <div>
+                            <span className="text-gray-400">Vuelo:</span>
+                            <span className="text-white ml-2 font-medium">{notification.metadata.flightNumber}</span>
+                          </div>
+                        )}
+                        {notification.metadata.function && (
+                          <div>
+                            <span className="text-gray-400">Función:</span>
+                            <span className="text-white ml-2 font-medium">{notification.metadata.function}</span>
+                          </div>
+                        )}
+                        {notification.metadata.origin && notification.metadata.destination && (
+                          <div>
+                            <span className="text-gray-400">Ruta:</span>
+                            <span className="text-white ml-2 font-medium">
+                              {notification.metadata.origin} → {notification.metadata.destination}
+                            </span>
+                          </div>
+                        )}
+                        {notification.metadata.startTime && (
+                          <div>
+                            <span className="text-gray-400">Inicio:</span>
+                            <span className="text-white ml-2 font-medium">
+                              {new Date(notification.metadata.startTime).toLocaleString('es-ES', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                        )}
+                        {notification.metadata.endTime && notification.metadata.startTime && (
+                          <div className="col-span-2">
+                            <span className="text-gray-400">Duración:</span>
+                            <span className="text-white ml-2 font-medium">
+                              {new Date(notification.metadata.startTime).toLocaleString('es-ES', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })} - {new Date(notification.metadata.endTime).toLocaleString('es-ES', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="flex items-center justify-between mt-3">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                       notification.type === 'success' ? 'bg-green-900 text-green-200' :
@@ -317,7 +431,7 @@ const NotificationsPage: React.FC = () => {
                       {notification.type === 'error' && 'Error'}
                       {notification.type === 'info' && 'Información'}
                     </span>
-                    {!notification.isRead && (
+                    {!notification.read && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

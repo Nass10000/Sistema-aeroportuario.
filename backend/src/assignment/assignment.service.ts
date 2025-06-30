@@ -51,27 +51,71 @@ export class AssignmentService {
       });
       const savedAssignment = await this.assignmentRepository.save(assignment);
 
-      // Crear notificación para el empleado asignado
-      // Ajusta el sender según tu lógica de negocio, aquí se deja como el mismo usuario asignado
-      const user = await this.assignmentRepository.manager.findOne(User, { where: { id: createAssignmentDto.userId } });
-      if (!user) {
-        throw new NotFoundException(`Usuario con ID ${createAssignmentDto.userId} no encontrado`);
+      // Obtener la asignación completa con relaciones para crear notificación detallada
+      const completeAssignment = await this.assignmentRepository.findOne({
+        where: { id: savedAssignment.id },
+        relations: ['operation', 'user']
+      });
+
+      if (!completeAssignment) {
+        throw new NotFoundException(`Asignación creada no encontrada`);
       }
+
+      // Formatear fechas para la notificación
+      const assignmentStartDate = new Date(completeAssignment.startTime);
+      const assignmentEndDate = new Date(completeAssignment.endTime);
+      const formatDate = (date: Date) => {
+        return date.toLocaleString('es-ES', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      };
+
+      // Crear mensaje detallado de la notificación
+      const notificationTitle = 'Nueva Asignación de Trabajo';
+      const notificationMessage = `Se te ha asignado la función de ${completeAssignment.function} para el vuelo ${completeAssignment.operation.flightNumber} (${completeAssignment.operation.origin} → ${completeAssignment.operation.destination}). Horario: ${formatDate(assignmentStartDate)} a ${formatDate(assignmentEndDate)}.`;
+
+      // Crear notificación para el empleado asignado
       await this.notificationService.create(
-        'Nueva asignación',
-        'Tienes una nueva asignación programada.',
+        notificationTitle,
+        notificationMessage,
         NotificationType.ASSIGNMENT,
-        user, // sender (puedes cambiar esto por el usuario que corresponda)
-        user, // recipient (User entity o al menos objeto con id)
+        completeAssignment.user, // sender - por ahora el mismo usuario
+        completeAssignment.user, // recipient
         undefined, // priority (opcional, usa el valor por defecto)
-        { assignmentId: savedAssignment.id }
+        { 
+          assignmentId: savedAssignment.id,
+          flightNumber: completeAssignment.operation.flightNumber,
+          origin: completeAssignment.operation.origin,
+          destination: completeAssignment.operation.destination,
+          function: completeAssignment.function,
+          startTime: completeAssignment.startTime,
+          endTime: completeAssignment.endTime
+        }
       );
 
-      // Emitir notificación en tiempo real (WebSocket)
+      // Emitir notificación en tiempo real (WebSocket) con información adicional
       this.notificationGateway.emitToUser(
         createAssignmentDto.userId,
         'new-assignment',
-        { assignmentId: savedAssignment.id }
+        { 
+          assignmentId: savedAssignment.id,
+          title: notificationTitle,
+          message: notificationMessage,
+          assignment: completeAssignment,
+          metadata: {
+            assignmentId: savedAssignment.id,
+            flightNumber: completeAssignment.operation.flightNumber,
+            origin: completeAssignment.operation.origin,
+            destination: completeAssignment.operation.destination,
+            function: completeAssignment.function,
+            startTime: completeAssignment.startTime,
+            endTime: completeAssignment.endTime
+          }
+        }
       );
 
       return savedAssignment;

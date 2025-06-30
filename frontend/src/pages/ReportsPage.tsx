@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { reportsService } from '../services/api';
+import { reportsService, authService, type User } from '../services/api';
 import StationSelect from '../components/StationSelect';
 
 const ReportsPage: React.FC = () => {
   const [selectedReport, setSelectedReport] = useState<string>('attendance');
   const [reportData, setReportData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [dateRange, setDateRange] = useState({
     startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0]
@@ -22,6 +23,26 @@ const ReportsPage: React.FC = () => {
     { id: 'operational-metrics', name: 'Métricas Operacionales', icon: '📊' }
   ];
 
+  // Función para determinar si el usuario puede acceder a reportes
+  const canAccessReports = (): boolean => {
+    return currentUser?.role === 'admin' || 
+           currentUser?.role === 'manager' || 
+           currentUser?.role === 'supervisor' || 
+           currentUser?.role === 'president';
+  };
+
+  // Función para determinar si el usuario puede ver todos los reportes o solo los de su estación
+  const canViewAllStations = (): boolean => {
+    return currentUser?.role === 'admin' || currentUser?.role === 'president';
+  };
+
+  // Función para determinar si el usuario puede editar (president solo visualiza)
+  const canEdit = (): boolean => {
+    return currentUser?.role === 'admin' || 
+           currentUser?.role === 'manager' || 
+           currentUser?.role === 'supervisor';
+  };
+
   type ReportParams = {
     startDate: string;
     endDate: string;
@@ -29,11 +50,24 @@ const ReportsPage: React.FC = () => {
   };
 
   const generateReport = async () => {
+    // Verificar permisos
+    if (!canAccessReports()) {
+      setReportData({ error: 'No tienes permisos para acceder a los reportes' });
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       let data;
       const params: ReportParams = { ...dateRange };
-      if (stationId) params.stationId = stationId;
+      
+      // Si el usuario no puede ver todas las estaciones, forzar su stationId
+      if (!canViewAllStations() && currentUser?.stationId) {
+        params.stationId = currentUser.stationId;
+      } else if (stationId) {
+        params.stationId = stationId;
+      }
 
       switch (selectedReport) {
         case 'attendance':
@@ -73,6 +107,12 @@ const ReportsPage: React.FC = () => {
     // Solo retorna mensaje de error, sin datos hardcodeados
     return { message: 'No se pudo obtener datos del backend para ' + reportType };
   };
+
+  useEffect(() => {
+    // Inicializar usuario actual
+    const user = authService.getCurrentUser();
+    setCurrentUser(user);
+  }, []);
 
   useEffect(() => {
     generateReport();
@@ -214,14 +254,48 @@ const ReportsPage: React.FC = () => {
     }
   };
 
+  // Verificar permisos antes de renderizar
+  if (!currentUser) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  if (!canAccessReports()) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="bg-red-900 border border-red-700 text-red-100 px-6 py-4 rounded-lg max-w-md text-center">
+          <h3 className="text-lg font-semibold mb-2">Acceso Restringido</h3>
+          <p>No tienes permisos para acceder a los reportes.</p>
+          <p className="text-sm mt-2 text-red-300">
+            Solo administradores, gerentes, supervisores y presidentes pueden ver reportes.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-white">Reportes</h1>
+        <div>
+          <h1 className="text-3xl font-bold text-white">Reportes</h1>
+          {currentUser?.role === 'president' && (
+            <p className="text-sm text-yellow-400 mt-1">
+              <svg className="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              Modo solo lectura - Presidente
+            </p>
+          )}
+        </div>
         <button
           onClick={generateReport}
-          disabled={loading}
+          disabled={loading || !canEdit()}
           className="btn-primary disabled:opacity-50"
+          title={!canEdit() ? 'Los presidentes no pueden actualizar reportes' : ''}
         >
           {loading ? 'Generando...' : 'Actualizar Reporte'}
         </button>
@@ -280,7 +354,18 @@ const ReportsPage: React.FC = () => {
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Estación
             </label>
-            <StationSelect value={stationId} onChange={setStationId} />
+            {canViewAllStations() ? (
+              <StationSelect value={stationId} onChange={setStationId} />
+            ) : (
+              <div className="input-field bg-gray-800 text-gray-400 cursor-not-allowed">
+                {currentUser?.stationId ? `Estación ${currentUser.stationId}` : 'Sin estación asignada'}
+              </div>
+            )}
+            {!canViewAllStations() && (
+              <p className="text-xs text-gray-400 mt-1">
+                Solo puedes ver reportes de tu estación asignada
+              </p>
+            )}
           </div>
         </div>
       </div>

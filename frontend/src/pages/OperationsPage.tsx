@@ -75,7 +75,7 @@ const OperationsPage: React.FC = () => {
       scheduledTime: new Date(newOperation.scheduledTime).toISOString(),
       passengerCount: 0, // Puedes cambiarlo si lo necesitas
       type: newOperation.operationType === 'arrival' ? 'ARRIVAL' : 'DEPARTURE',
-      status: newOperation.status.toUpperCase(),
+      status: newOperation.status as 'scheduled' | 'boarding' | 'delayed' | 'cancelled' | 'on-time' | 'departed' | 'arrived',
       stationId: parseInt(newOperation.stationId)
       // No mandes airline, aircraftType ni gate ni nada más extra
     };
@@ -348,27 +348,27 @@ const OperationsPage: React.FC = () => {
                 <tr key={operation.id} className="table-row border-b border-gray-700">
                   <td className="py-3 px-4">
                     <div className="flex items-center space-x-2">
-                      {getOperationTypeIcon(operation.operationType)}
+                      {getOperationTypeIcon(operation.operationType || 'departure')}
                       <span className="text-white font-medium">{operation.flightNumber}</span>
                     </div>
                   </td>
-                  <td className="py-3 px-4 text-gray-300">{operation.airline}</td>
+                  <td className="py-3 px-4 text-gray-300">{operation.airline || 'N/A'}</td>
                   <td className="py-3 px-4 text-gray-300">
                     {operation.origin} → {operation.destination}
                   </td>
                   <td className="py-3 px-4 text-gray-300">
-                    {new Date(operation.scheduledTime).toLocaleString()}
+                    {operation.scheduledTime ? new Date(operation.scheduledTime).toLocaleString() : 'N/A'}
                   </td>
                   <td className="py-3 px-4">
                     <span className={`px-2 py-1 text-xs font-medium text-white rounded-full ${
-                      operation.operationType === 'arrival' ? 'bg-green-600' : 'bg-blue-600'
+                      (operation.operationType || 'departure') === 'arrival' ? 'bg-green-600' : 'bg-blue-600'
                     }`}>
-                      {operation.operationType === 'arrival' ? 'Llegada' : 'Salida'}
+                      {(operation.operationType || 'departure') === 'arrival' ? 'Llegada' : 'Salida'}
                     </span>
                   </td>
                   <td className="py-3 px-4">
-                    <span className={`px-2 py-1 text-xs font-medium text-white rounded-full ${getStatusColor(operation.status)}`}>
-                      {getStatusName(operation.status)}
+                    <span className={`px-2 py-1 text-xs font-medium text-white rounded-full ${getStatusColor(operation.status || 'scheduled')}`}>
+                      {getStatusName(operation.status || 'scheduled')}
                     </span>
                   </td>
                   <td className="py-3 px-4 text-gray-300">{operation.gate || 'N/A'}</td>

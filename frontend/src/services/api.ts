@@ -78,7 +78,7 @@ export interface User {
   id: number;
   name: string;
   email: string;
-  role: 'admin' | 'manager' | 'supervisor' | 'employee';
+  role: 'admin' | 'manager' | 'supervisor' | 'employee' | 'president';
   stationId?: number;
   category?: string;
 }
@@ -92,6 +92,8 @@ export interface LoginResponse {
   access_token: string;
   user: User;
 }
+
+
 
 // Servicios de API
 export const authService = {
@@ -130,6 +132,14 @@ export const authService = {
         tokenLength: access_token.length
       });
 
+      // Conectar WebSocket después del login exitoso
+      setTimeout(() => {
+        import('./websocket').then(({ websocketService }) => {
+          websocketService.connect();
+          websocketService.requestNotificationPermission();
+        });
+      }, 100);
+
       return response.data;
     } catch (error: any) {
       console.error('❌ AuthService: Login failed:', {
@@ -144,6 +154,11 @@ export const authService = {
   logout: () => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user');
+    
+    // Desconectar WebSocket al hacer logout
+    import('./websocket').then(({ websocketService }) => {
+      websocketService.disconnect();
+    });
   },
 
   getCurrentUser: (): User | null => {
@@ -156,6 +171,29 @@ export const authService = {
   },
 };
 
+// Add Notification interface definition
+export interface Notification {
+  id: number;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  read: boolean;
+  createdAt: string;
+  recipientId?: number;
+  userId?: number;
+  isRead?: boolean;
+  metadata?: {
+    assignmentId?: number;
+    flightNumber?: string;
+    function?: string;
+    startTime?: string;
+    endTime?: string;
+    origin?: string;
+    destination?: string;
+    [key: string]: any;
+  };
+}
+
 export const userService = {
   getUsers: async (): Promise<User[]> => {
     const response = await api.get('/users');
@@ -166,13 +204,20 @@ export const userService = {
     const response = await api.post('/users', userData);
     return response.data;
   },
+
+  updateUser: async (userId: number, userData: Partial<User>): Promise<User> => {
+    const response = await api.post(`/users/${userId}`, userData);
+    return response.data;
+  },
 };
 
 // Add Station interface definition
 export interface Station {
   id: number;
   name: string;
-  // Add other relevant fields here
+  code?: string;
+  terminal?: string;
+  isActive?: boolean;
 }
 
 export const stationService = {
@@ -210,7 +255,11 @@ export interface Operation {
   flightNumber: string;
   origin: string;
   destination: string;
-  // ...otros campos si los necesitas
+  airline?: string;
+  operationType?: 'arrival' | 'departure';
+  scheduledTime?: string;
+  status?: 'on-time' | 'delayed' | 'cancelled' | 'boarding' | 'departed' | 'arrived' | 'scheduled';
+  gate?: string;
 }
 
 export const operationService = {
@@ -237,7 +286,14 @@ export const operationService = {
 // Add Assignment interface definition
 export interface Assignment {
   id: number;
-  // Add other relevant fields here
+  userId: number;
+  operationId: number;
+  startTime: string;
+  endTime: string;
+  assignmentFunction: string;
+  cost: number;
+  user?: User;
+  operation?: Operation;
 }
 
 export const assignmentService = {
@@ -268,7 +324,7 @@ export interface Punch {
   type: 'in' | 'out';
   timestamp: string;
   comment?: string;
-  // Add other relevant fields here
+  location?: string;
 }
 
 export const punchService = {

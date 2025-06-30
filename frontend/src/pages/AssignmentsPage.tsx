@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { assignmentService, userService, operationService, type Assignment, type User, type Operation } from '../services/api';
+import { assignmentService, userService, operationService, authService, type Assignment, type User, type Operation } from '../services/api';
 import MultiSelect from '../components/MultiSelect';
 
 // Helper para extraer el valor numérico del objeto seleccionado (isMulti=false)
@@ -15,6 +15,7 @@ const AssignmentsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   // Cambia el estado para que acepte correctamente los valores de MultiSelect
   const [newAssignment, setNewAssignment] = useState<{
@@ -62,6 +63,17 @@ const AssignmentsPage: React.FC = () => {
   ];
 
   useEffect(() => {
+    // Verificar permisos del usuario actual
+    const user = authService.getCurrentUser();
+    setCurrentUser(user);
+    
+    // Solo permitir acceso a admin, manager y supervisor
+    if (!user || user.role === 'employee' || user.role === 'president') {
+      setError('No tienes permisos para acceder a las asignaciones');
+      setLoading(false);
+      return;
+    }
+
     const loadAllData = async () => {
       setLoading(true);
       try {
@@ -206,6 +218,11 @@ const AssignmentsPage: React.FC = () => {
     }
   };
 
+  const getFunctionDisplayName = (functionCode: string) => {
+    const functionOption = functionOptions.find(opt => opt.value === functionCode);
+    return functionOption ? functionOption.label : functionCode;
+  };
+
   const debugAssignmentData = (assignment: Assignment) => {
     console.log('🔍 Debug asignación completa:', {
       id: assignment.id,
@@ -232,6 +249,23 @@ const AssignmentsPage: React.FC = () => {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  // Verificar permisos específicos
+  if (currentUser && (currentUser.role === 'employee' || currentUser.role === 'president')) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="bg-red-900 border border-red-700 text-red-100 px-6 py-4 rounded-lg max-w-md text-center">
+          <h3 className="text-lg font-semibold mb-2">Acceso Restringido</h3>
+          <p>No tienes permisos para acceder a la gestión de asignaciones.</p>
+          <p className="text-sm mt-2 text-red-300">
+            {currentUser.role === 'employee' 
+              ? 'Los empleados no pueden gestionar asignaciones.' 
+              : 'Los presidentes solo tienen acceso de visualización.'}
+          </p>
+        </div>
       </div>
     );
   }
@@ -400,10 +434,12 @@ const AssignmentsPage: React.FC = () => {
             <thead>
               <tr className="border-b border-gray-700">
                 <th className="text-left py-3 px-4 text-gray-300">ID</th>
-                <th className="text-left py-3 px-4 text-gray-300">Usuario</th>
+                <th className="text-left py-3 px-4 text-gray-300">Empleado Asignado</th>
                 <th className="text-left py-3 px-4 text-gray-300">Operación</th>
+                <th className="text-left py-3 px-4 text-gray-300">Función</th>
                 <th className="text-left py-3 px-4 text-gray-300">Inicio</th>
                 <th className="text-left py-3 px-4 text-gray-300">Fin</th>
+                <th className="text-left py-3 px-4 text-gray-300">Costo/Hora</th>
                 <th className="text-left py-3 px-4 text-gray-300">Estado</th>
                 <th className="text-left py-3 px-4 text-gray-300">Acciones</th>
               </tr>
@@ -417,11 +453,28 @@ const AssignmentsPage: React.FC = () => {
                 return (
                   <tr key={assignment.id} className="table-row border-b border-gray-700">
                     <td className="py-3 px-4 text-gray-300">#{assignment.id}</td>
-                    <td className="py-3 px-4 text-white font-medium">
-                      {getUserName(assignment)}
+                    <td className="py-3 px-4">
+                      <div>
+                        <div className="text-white font-medium">{getUserName(assignment)}</div>
+                        <div className="text-sm text-gray-400">
+                          {users.find(u => u.id === ((assignment as any).userId ?? (assignment as any).user?.id))?.email || 'Email no disponible'}
+                        </div>
+                      </div>
                     </td>
-                    <td className="py-3 px-4 text-gray-300">
-                      {getOperationInfo(assignment)}
+                    <td className="py-3 px-4">
+                      <div>
+                        <div className="text-white font-medium">{getOperationInfo(assignment)}</div>
+                        <div className="text-sm text-gray-400">
+                          {operations.find(o => o.id === ((assignment as any).operationId ?? (assignment as any).operation?.id))?.scheduledTime 
+                            ? new Date(operations.find(o => o.id === ((assignment as any).operationId ?? (assignment as any).operation?.id))!.scheduledTime!).toLocaleDateString()
+                            : 'Fecha no disponible'}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {getFunctionDisplayName((assignment as any).assignmentFunction || (assignment as any).function || 'No especificada')}
+                      </span>
                     </td>
                     <td className="py-3 px-4 text-gray-300">
                       {formatDate((assignment as any).startTime || (assignment as any).start_time)}
@@ -430,8 +483,13 @@ const AssignmentsPage: React.FC = () => {
                       {formatDate((assignment as any).endTime || (assignment as any).end_time)}
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`px-2 py-1 text-xs font-medium text-white rounded-full ${getStatusColor((assignment as any).assignmentStatus)}`}>
-                        {getStatusName((assignment as any).assignmentStatus)}
+                      <span className="text-green-400 font-medium">
+                        ${(assignment as any).cost || '0'}/h
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`px-2 py-1 text-xs font-medium text-white rounded-full ${getStatusColor((assignment as any).assignmentStatus || 'assigned')}`}>
+                        {getStatusName((assignment as any).assignmentStatus || 'assigned')}
                       </span>
                     </td>
                     <td className="py-3 px-4">

@@ -17,7 +17,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, activeSection, onSectionChange 
           <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
         </svg>
       ),
-      roles: ['admin', 'manager', 'employee']
+      roles: ['admin', 'manager', 'supervisor', 'employee', 'president']
     },
     {
       id: 'users',
@@ -27,7 +27,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, activeSection, onSectionChange 
           <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/>
         </svg>
       ),
-      roles: ['admin', 'manager']
+      roles: ['admin', 'manager', 'supervisor']
     },
     {
       id: 'stations',
@@ -47,7 +47,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, activeSection, onSectionChange 
           <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"/>
         </svg>
       ),
-      roles: ['admin', 'manager', 'employee']
+      roles: ['admin', 'manager', 'supervisor', 'employee']
     },
     {
       id: 'assignments',
@@ -57,7 +57,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, activeSection, onSectionChange 
           <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 01-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12zm-9 7a1 1 0 012 0v1.586l2.293-2.293a1 1 0 111.414 1.414L6.414 15H8a1 1 0 010 2H4a1 1 0 01-1-1v-4zm13-1a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 010-2h1.586l-2.293-2.293a1 1 0 111.414-1.414L15 13.586V12a1 1 0 011-1z" clipRule="evenodd"/>
         </svg>
       ),
-      roles: ['admin', 'manager', 'employee']
+      roles: ['admin', 'manager', 'supervisor']
     },
     {
       id: 'punch',
@@ -67,7 +67,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, activeSection, onSectionChange 
           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"/>
         </svg>
       ),
-      roles: ['admin', 'manager', 'employee']
+      roles: ['admin', 'manager', 'supervisor', 'employee']
     },
     {
       id: 'reports',
@@ -77,7 +77,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, activeSection, onSectionChange 
           <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/>
         </svg>
       ),
-      roles: ['admin', 'manager']
+      roles: ['admin', 'manager', 'supervisor', 'president']
     },
     {
       id: 'notifications',
@@ -87,7 +87,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, activeSection, onSectionChange 
           <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"/>
         </svg>
       ),
-      roles: ['admin', 'manager', 'employee']
+      roles: ['admin', 'manager', 'supervisor', 'employee']
     },
     {
       id: 'scheduling',
@@ -97,7 +97,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, activeSection, onSectionChange 
           <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"/>
         </svg>
       ),
-      roles: ['admin', 'manager']
+      roles: ['admin', 'manager', 'supervisor']
     },
   ];
 

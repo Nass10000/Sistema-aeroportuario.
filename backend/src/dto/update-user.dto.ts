@@ -19,6 +19,7 @@ import {
 import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { EmployeeCategory, ShiftType } from '../user/user.entity';
+import { UserRole } from '../common/enums/roles.enum';
 
 export class UpdateUserDto {
   @ApiProperty({
@@ -235,4 +236,14 @@ export class UpdateUserDto {
     message: 'La contraseña debe contener al menos: 1 minúscula, 1 mayúscula, 1 número y 1 carácter especial (@$!%*?&)' 
   })
   password?: string;
+
+  @ApiProperty({ 
+    description: 'Rol del usuario en el sistema',
+    enum: UserRole,
+    example: UserRole.EMPLOYEE,
+    required: false
+  })
+  @IsOptional()
+  @IsEnum(UserRole, { message: 'Rol inválido' })
+  role?: UserRole;
 }
