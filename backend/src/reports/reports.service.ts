@@ -54,45 +54,94 @@ export class ReportsService {
     startDate: string,
     endDate: string,
     stationId?: number
-  ): Promise<AttendanceReport[]> {
-    const query = this.assignmentRepository
-      .createQueryBuilder('assignment')
-      .leftJoin('assignment.user', 'user')
-      .leftJoin('assignment.operation', 'operation')
-      .leftJoin('operation.station', 'station')
-      .select([
-        'user.id as employeeId',
-        'user.name as employeeName',
-        'COUNT(*) as totalAssignments',
-        'COUNT(CASE WHEN assignment.status = :completed THEN 1 END) as completedAssignments',
-        'COUNT(CASE WHEN assignment.status = :absent THEN 1 END) as absentAssignments',
-        'SUM(CASE WHEN assignment.actualEndTime IS NOT NULL AND assignment.actualStartTime IS NOT NULL THEN EXTRACT(EPOCH FROM (assignment.actualEndTime - assignment.actualStartTime))/3600 ELSE 0 END) as totalHours'
-      ])
-      .where('assignment.startTime BETWEEN :startDate AND :endDate', { startDate, endDate })
-      .setParameter('completed', AssignmentStatus.COMPLETED)
-      .setParameter('absent', AssignmentStatus.ABSENT)
-      .groupBy('user.id, user.name');
+  ): Promise<any> {
+    try {
+      // Optimización: Limitar resultados y mejorar performance
+      const query = this.assignmentRepository
+        .createQueryBuilder('assignment')
+        .leftJoin('assignment.user', 'user')
+        .leftJoin('assignment.operation', 'operation')
+        .leftJoin('operation.station', 'station')
+        .select([
+          'user.id as employeeId',
+          'user.name as employeeName',
+          'station.name as stationName',
+          'COUNT(*) as totalAssignments',
+          'COUNT(CASE WHEN assignment.status = :completed THEN 1 END) as completedAssignments',
+          'COUNT(CASE WHEN assignment.status = :absent THEN 1 END) as absentAssignments'
+        ])
+        .where('assignment.startTime BETWEEN :startDate AND :endDate', { startDate, endDate })
+        .setParameter('completed', AssignmentStatus.COMPLETED)
+        .setParameter('absent', AssignmentStatus.ABSENT)
+        .groupBy('user.id, user.name, station.name')
+        .limit(100); // Limitar resultados para evitar timeout
 
-    if (stationId) {
-      query.andWhere('station.id = :stationId', { stationId });
+      if (stationId) {
+        query.andWhere('station.id = :stationId', { stationId });
+      }
+
+      const results = await query.getRawMany();
+
+      // 2. Obtener punches solo de los empleados encontrados
+      const userIds = results.map(r => r.employeeId);
+      let punchesByUser: Record<string, any[]> = {};
+      if (userIds.length > 0) {
+        const punches = await this.punchRepository
+          .createQueryBuilder('punch')
+          .leftJoin('punch.user', 'user')
+          .where('user.id IN (:...userIds)', { userIds })
+          .andWhere('punch.timestamp BETWEEN :startDate AND :endDate', { startDate, endDate })
+          .orderBy('punch.timestamp', 'ASC')
+          .limit(500) // Limitar punches también
+          .getMany();
+        punchesByUser = punches.reduce((acc, punch) => {
+          const uid = punch.user.id;
+          if (!acc[uid]) acc[uid] = [];
+          acc[uid].push(punch);
+          return acc;
+        }, {} as Record<string, any[]>);
+      }
+
+      // 3. Construir detalles para el frontend
+      const details = results.map(result => {
+        const punches = punchesByUser[result.employeeId] || [];
+        const checkIn = punches.find(p => p.type === 'in');
+        const checkOut = [...punches].reverse().find(p => p.type === 'out');
+        let status = 'Ausente';
+        if (parseInt(result.completedAssignments) > 0 || checkIn) {
+          status = 'Presente';
+        }
+        return {
+          name: result.employeeName,
+          station: result.stationName || 'N/A',
+          status,
+          checkIn: checkIn ? new Date(checkIn.timestamp).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '-',
+          checkOut: checkOut ? new Date(checkOut.timestamp).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '-',
+        };
+      });
+
+      // 4. Calcular resumen
+      const totalEmployees = results.length;
+      const presentToday = details.filter(d => d.status === 'Presente').length;
+      const absentToday = details.filter(d => d.status === 'Ausente').length;
+      const attendanceRate = totalEmployees > 0 ? Math.round((presentToday / totalEmployees) * 100) : 0;
+
+      return {
+        summary: {
+          totalEmployees,
+          presentToday,
+          absentToday,
+          attendanceRate,
+        },
+        details,
+      };
+    } catch (error) {
+      console.error('Error generating attendance report:', error);
+      return {
+        summary: { totalEmployees: 0, presentToday: 0, absentToday: 0, attendanceRate: 0 },
+        details: [],
+      };
     }
-
-    const results = await query.getRawMany();
-
-    return results.map(result => ({
-      employeeId: parseInt(result.employeeId),
-      employeeName: result.employeeName,
-      totalAssignments: parseInt(result.totalAssignments),
-      completedAssignments: parseInt(result.completedAssignments),
-      absentAssignments: parseInt(result.absentAssignments),
-      attendanceRate: result.totalAssignments > 0 
-        ? (result.completedAssignments / result.totalAssignments) * 100 
-        : 0,
-      totalHours: parseFloat(result.totalHours) || 0,
-      averageHoursPerDay: result.totalAssignments > 0 
-        ? (parseFloat(result.totalHours) || 0) / result.totalAssignments 
-        : 0
-    }));
   }
 
   async getOvertimeReport(

@@ -1,8 +1,9 @@
-import { Injectable, BadRequestException, ConflictException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';
 import { CreateUserDto } from '../dto/create-user.dto';
+import { UpdateUserDto } from '../dto/update-user.dto';
 import { UserRole } from '../common/enums/roles.enum';
 import * as bcrypt from 'bcryptjs';
 
@@ -163,6 +164,54 @@ export class UserService {
       } catch (error) {
         console.log(`⚠️  Error creando usuario ${userData.email}:`, error.message);
       }
+    }
+  }
+
+  async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
+    // Verificar si el usuario existe
+    const existingUser = await this.userRepository.findOneBy({ id });
+    
+    if (!existingUser) {
+      throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
+    }
+
+    // Si se está actualizando el email, verificar que no exista otro usuario con ese email
+    if (updateUserDto.email && updateUserDto.email !== existingUser.email) {
+      const userWithEmail = await this.userRepository.findOneBy({ 
+        email: updateUserDto.email 
+      });
+      
+      if (userWithEmail) {
+        throw new ConflictException('El email ya está registrado por otro usuario');
+      }
+    }
+
+    try {
+      // Si se está actualizando la contraseña, encriptarla
+      const updateData = { ...updateUserDto };
+      if (updateData.password) {
+        updateData.password = await bcrypt.hash(updateData.password, 12);
+      }
+      
+      // Actualizar el usuario
+      await this.userRepository.update(id, updateData);
+      
+      // Obtener el usuario actualizado
+      const updatedUser = await this.userRepository.findOneBy({ id });
+      
+      if (!updatedUser) {
+        throw new NotFoundException(`Usuario con ID ${id} no encontrado después de la actualización`);
+      }
+      
+      // Remover la contraseña de la respuesta
+      const { password, ...userResponse } = updatedUser;
+      return userResponse as User;
+      
+    } catch (error) {
+      if (error instanceof ConflictException || error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException('Error al actualizar el usuario: ' + error.message);
     }
   }
 }

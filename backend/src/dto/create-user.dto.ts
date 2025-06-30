@@ -126,4 +126,14 @@ export class CreateUserDto {
   @IsString({ each: true, message: 'Cada certificación debe ser una cadena de texto' })
   @MaxLength(50, { each: true, message: 'Cada certificación no puede exceder 50 caracteres' })
   certifications?: string[];
+
+  @ApiProperty({ 
+    description: 'ID de la estación donde trabaja el empleado',
+    example: 1,
+    required: false
+  })
+  @IsOptional()
+  @IsNumber({}, { message: 'El ID de la estación debe ser un número' })
+  @Min(1, { message: 'El ID de la estación debe ser mayor a 0' })
+  stationId?: number;
 }

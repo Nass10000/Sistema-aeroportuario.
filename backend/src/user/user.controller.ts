@@ -72,6 +72,18 @@ export class UserController {
     };
   }
 
+  @Post(':id')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Actualizar usuario (solo ADMIN puede editar stationId de managers)' })
+  @ApiParam({ name: 'id', description: 'ID del usuario', type: 'number' })
+  @ApiBody({ type: CreateUserDto, description: 'Datos del usuario a actualizar' })
+  @ApiResponse({ status: 200, description: 'Usuario actualizado', type: User })
+  @ApiResponse({ status: 400, description: 'Datos inválidos' })
+  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
+  async update(@Param('id', ParseIntPipe) id: number, @Body() updateUserDto: any) {
+    return this.userService.update(id, updateUserDto);
+  }
+
   // Endpoint temporal para testing sin autenticación
   @Get('test')
   @ApiOperation({ summary: 'Test endpoint sin autenticación' })

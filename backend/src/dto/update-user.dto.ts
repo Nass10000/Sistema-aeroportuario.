@@ -13,7 +13,8 @@ import {
   MaxLength,
   Matches,
   IsUrl,
-  IsBoolean
+  IsBoolean,
+  IsEmail
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
@@ -193,4 +194,45 @@ export class UpdateUserDto {
   @IsOptional()
   @IsBoolean({ message: 'La disponibilidad debe ser true o false' })
   isAvailable?: boolean;
+
+  @ApiProperty({ 
+    description: 'ID de la estación donde trabaja el empleado',
+    example: 1,
+    required: false
+  })
+  @IsOptional()
+  @IsNumber({}, { message: 'El ID de la estación debe ser un número' })
+  @Min(1, { message: 'El ID de la estación debe ser mayor a 0' })
+  stationId?: number;
+
+  @ApiProperty({
+    description: 'Email corporativo del usuario',
+    example: 'juan.perez@aeo.com',
+    format: 'email',
+    required: false
+  })
+  @IsOptional()
+  @IsEmail({}, { message: 'Debe ser un email válido' })
+  @MaxLength(255, { message: 'El email no puede exceder 255 caracteres' })
+  @Matches(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/, {
+    message: 'Formato de email inválido'
+  })
+  @Transform(({ value }) => value?.toLowerCase().trim())
+  email?: string;
+
+  @ApiProperty({
+    description: 'Contraseña segura (mín. 8 caracteres, mayúscula, minúscula, número y carácter especial)',
+    example: 'MiPassword123!',
+    minLength: 8,
+    maxLength: 128,
+    required: false
+  })
+  @IsOptional()
+  @IsString({ message: 'La contraseña debe ser una cadena de texto' })
+  @MinLength(8, { message: 'La contraseña debe tener al menos 8 caracteres' })
+  @MaxLength(128, { message: 'La contraseña no puede exceder 128 caracteres' })
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, {
+    message: 'La contraseña debe contener al menos: 1 minúscula, 1 mayúscula, 1 número y 1 carácter especial (@$!%*?&)' 
+  })
+  password?: string;
 }

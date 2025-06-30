@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { reportsService } from '../services/api';
+import StationSelect from '../components/StationSelect';
 
 const ReportsPage: React.FC = () => {
   const [selectedReport, setSelectedReport] = useState<string>('attendance');
@@ -9,6 +10,7 @@ const ReportsPage: React.FC = () => {
     startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0]
   });
+  const [stationId, setStationId] = useState<number | null>(null);
 
   const reportTypes = [
     { id: 'attendance', name: 'Reporte de Asistencia', icon: '👥' },
@@ -20,11 +22,18 @@ const ReportsPage: React.FC = () => {
     { id: 'operational-metrics', name: 'Métricas Operacionales', icon: '📊' }
   ];
 
+  type ReportParams = {
+    startDate: string;
+    endDate: string;
+    stationId?: number;
+  };
+
   const generateReport = async () => {
     setLoading(true);
     try {
       let data;
-      const params = { ...dateRange };
+      const params: ReportParams = { ...dateRange };
+      if (stationId) params.stationId = stationId;
 
       switch (selectedReport) {
         case 'attendance':
@@ -54,7 +63,6 @@ const ReportsPage: React.FC = () => {
       setReportData(data);
     } catch (error) {
       console.error('Error generating report:', error);
-      // Datos de ejemplo en caso de error
       setReportData(generateMockData(selectedReport));
     } finally {
       setLoading(false);
@@ -62,41 +70,13 @@ const ReportsPage: React.FC = () => {
   };
 
   const generateMockData = (reportType: string) => {
-    switch (reportType) {
-      case 'attendance':
-        return {
-          summary: {
-            totalEmployees: 25,
-            presentToday: 23,
-            absentToday: 2,
-            attendanceRate: 92
-          },
-          details: [
-            { name: 'Juan Pérez', status: 'Presente', checkIn: '08:00', checkOut: '17:00' },
-            { name: 'María González', status: 'Presente', checkIn: '08:15', checkOut: '17:30' },
-            { name: 'Carlos López', status: 'Ausente', checkIn: '-', checkOut: '-' }
-          ]
-        };
-      case 'overtime':
-        return {
-          summary: {
-            totalOvertimeHours: 45,
-            employeesWithOvertime: 8,
-            averageOvertime: 5.6
-          },
-          details: [
-            { name: 'Ana Torres', regularHours: 40, overtimeHours: 8, totalPay: '$1,200' },
-            { name: 'Luis Mendez', regularHours: 40, overtimeHours: 12, totalPay: '$1,350' }
-          ]
-        };
-      default:
-        return { message: 'Datos de ejemplo para ' + reportType };
-    }
+    // Solo retorna mensaje de error, sin datos hardcodeados
+    return { message: 'No se pudo obtener datos del backend para ' + reportType };
   };
 
   useEffect(() => {
     generateReport();
-  }, [selectedReport]);
+  }, [selectedReport, stationId]);
 
   const renderReportContent = () => {
     if (loading) {
@@ -147,15 +127,18 @@ const ReportsPage: React.FC = () => {
                   <thead>
                     <tr className="border-b border-gray-700">
                       <th className="text-left py-3 px-4 text-gray-300">Empleado</th>
+                      <th className="text-left py-3 px-4 text-gray-300">Estación</th>
                       <th className="text-left py-3 px-4 text-gray-300">Estado</th>
                       <th className="text-left py-3 px-4 text-gray-300">Entrada</th>
                       <th className="text-left py-3 px-4 text-gray-300">Salida</th>
+                      <th className="text-left py-3 px-4 text-gray-300">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {reportData.details?.map((item: any, index: number) => (
                       <tr key={index} className="border-b border-gray-700 hover:bg-gray-700">
                         <td className="py-3 px-4 text-white">{item.name}</td>
+                        <td className="py-3 px-4 text-gray-300">{item.station}</td>
                         <td className="py-3 px-4">
                           <span className={`px-2 py-1 rounded-full text-xs ${
                             item.status === 'Presente' ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'
@@ -267,10 +250,10 @@ const ReportsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Filtros de fecha */}
+      {/* Filtros de fecha y estación */}
       <div className="card">
         <h3 className="text-lg font-semibold text-white mb-4">Filtros</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Fecha de inicio
@@ -292,6 +275,12 @@ const ReportsPage: React.FC = () => {
               onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
               className="input-field"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Estación
+            </label>
+            <StationSelect value={stationId} onChange={setStationId} />
           </div>
         </div>
       </div>
