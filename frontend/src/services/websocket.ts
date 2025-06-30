@@ -11,22 +11,16 @@ class WebSocketService {
     }
 
     const token = localStorage.getItem('auth_token');
-    const userData = localStorage.getItem('user');
-    
-    if (!token || !userData) {
-      console.warn('No auth token or user data found, cannot connect to WebSocket');
+    if (!token) {
+      console.warn('No auth token found, cannot connect to WebSocket');
       return;
     }
 
-    const user = JSON.parse(userData);
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
     
     this.socket = io(`${API_URL}/notifications`, {
       auth: {
         token: token
-      },
-      query: {
-        userId: user.id.toString()
       },
       autoConnect: true
     });
@@ -51,7 +45,7 @@ class WebSocketService {
       this.handleNotification(data);
     });
 
-    this.socket.on('new-assignment', (data) => {
+    this.socket.on('assignmentNotification', (data) => {
       console.log('📋 Assignment notification received:', data);
       this.handleAssignmentNotification(data);
     });
@@ -80,17 +74,15 @@ class WebSocketService {
   }
 
   private handleAssignmentNotification(data: any) {
-    console.log('📋 Processing assignment notification data:', data);
-    
     // Manejar notificaciones específicas de asignaciones
     if (Notification.permission === 'granted') {
-      new Notification(data.title || 'Nueva Asignación', {
-        body: data.message || `Se te ha asignado una nueva operación`,
+      new Notification('Nueva Asignación', {
+        body: `Se te ha asignado una nueva operación: ${data.operationName || data.flightNumber}`,
         icon: '/vite.svg'
       });
     }
 
-    // Disparar evento personalizado con todos los datos
+    // Disparar evento personalizado
     window.dispatchEvent(new CustomEvent('newAssignmentNotification', { detail: data }));
   }
 
