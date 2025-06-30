@@ -62,8 +62,8 @@ export class AssignmentService {
       }
 
       // Formatear fechas para la notificación
-      const startDate = new Date(completeAssignment.startTime);
-      const endDate = new Date(completeAssignment.endTime);
+      const assignmentStartDate = new Date(completeAssignment.startTime);
+      const assignmentEndDate = new Date(completeAssignment.endTime);
       const formatDate = (date: Date) => {
         return date.toLocaleString('es-ES', {
           day: '2-digit',
@@ -76,7 +76,7 @@ export class AssignmentService {
 
       // Crear mensaje detallado de la notificación
       const notificationTitle = 'Nueva Asignación de Trabajo';
-      const notificationMessage = `Se te ha asignado la función de ${completeAssignment.function} para el vuelo ${completeAssignment.operation.flightNumber} (${completeAssignment.operation.origin} → ${completeAssignment.operation.destination}). Horario: ${formatDate(startDate)} a ${formatDate(endDate)}.`;
+      const notificationMessage = `Se te ha asignado la función de ${completeAssignment.function} para el vuelo ${completeAssignment.operation.flightNumber} (${completeAssignment.operation.origin} → ${completeAssignment.operation.destination}). Horario: ${formatDate(assignmentStartDate)} a ${formatDate(assignmentEndDate)}.`;
 
       // Crear notificación para el empleado asignado
       await this.notificationService.create(
@@ -89,6 +89,8 @@ export class AssignmentService {
         { 
           assignmentId: savedAssignment.id,
           flightNumber: completeAssignment.operation.flightNumber,
+          origin: completeAssignment.operation.origin,
+          destination: completeAssignment.operation.destination,
           function: completeAssignment.function,
           startTime: completeAssignment.startTime,
           endTime: completeAssignment.endTime
@@ -103,7 +105,16 @@ export class AssignmentService {
           assignmentId: savedAssignment.id,
           title: notificationTitle,
           message: notificationMessage,
-          assignment: completeAssignment
+          assignment: completeAssignment,
+          metadata: {
+            assignmentId: savedAssignment.id,
+            flightNumber: completeAssignment.operation.flightNumber,
+            origin: completeAssignment.operation.origin,
+            destination: completeAssignment.operation.destination,
+            function: completeAssignment.function,
+            startTime: completeAssignment.startTime,
+            endTime: completeAssignment.endTime
+          }
         }
       );
 
