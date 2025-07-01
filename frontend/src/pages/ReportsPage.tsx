@@ -90,10 +90,10 @@ const ReportsPage: React.FC = () => {
     
     console.log('🔄 Generating report:', selectedReport, 'with params:', dateRange, 'stationId:', stationId);
 
-    // Mostrar advertencia de timeout después de 15 segundos (reducido de 30)
+    // Mostrar advertencia de timeout después de 8 segundos (reducido de 15)
     const timeoutTimer = setTimeout(() => {
       setTimeoutWarning(true);
-    }, 15000);
+    }, 8000);
 
     // Simular progreso de carga más rápido
     const progressTimer = setInterval(() => {
@@ -118,47 +118,108 @@ const ReportsPage: React.FC = () => {
 
       switch (selectedReport) {
         case 'attendance':
-          console.log('📋 Requesting attendance report...');
+          console.log('📋 [FRONTEND] SOLICITANDO ATTENDANCE REPORT...');
+          console.log('📋 [FRONTEND] Params:', params);
+          console.log('📋 [FRONTEND] Timestamp antes de llamada:', new Date().toISOString());
+          
           data = await reportsService.getAttendanceReport(params);
-          console.log('✅ Attendance report received:', data);
+          
+          console.log('✅ [FRONTEND] ======================== ATTENDANCE REPORT RECIBIDO ========================');
+          console.log('✅ [FRONTEND] Timestamp después de llamada:', new Date().toISOString());
+          console.log('✅ [FRONTEND] Tipo de data recibida:', typeof data);
+          console.log('✅ [FRONTEND] Data es null/undefined:', data == null);
+          console.log('✅ [FRONTEND] Data keys:', data ? Object.keys(data) : 'no data');
+          console.log('✅ [FRONTEND] Data completa (JSON):', JSON.stringify(data, null, 2));
+          
+          if (data && typeof data === 'object') {
+            console.log('✅ [FRONTEND] Verificando estructura esperada...');
+            console.log('✅ [FRONTEND] Tiene summary:', !!data.summary);
+            console.log('✅ [FRONTEND] Tiene details:', !!data.details);
+            console.log('✅ [FRONTEND] Details es array:', Array.isArray(data.details));
+            console.log('✅ [FRONTEND] Details length:', data.details?.length || 0);
+            
+            if (data.summary) {
+              console.log('✅ [FRONTEND] Summary completo:', data.summary);
+            }
+            
+            if (data.details && Array.isArray(data.details) && data.details.length > 0) {
+              console.log('✅ [FRONTEND] Primeros 2 details:', data.details.slice(0, 2));
+            }
+          }
           break;
         case 'overtime':
-          console.log('⏰ Requesting overtime report...');
+          console.log('⏰ [FRONTEND] SOLICITANDO OVERTIME REPORT...');
+          console.log('⏰ [FRONTEND] Params:', params);
+          console.log('⏰ [FRONTEND] Timestamp antes de llamada:', new Date().toISOString());
+          
           data = await reportsService.getOvertimeReport(params);
-          console.log('✅ Overtime report received:', data);
+          
+          console.log('✅ [FRONTEND] ======================== OVERTIME REPORT RECIBIDO ========================');
+          console.log('✅ [FRONTEND] Timestamp después de llamada:', new Date().toISOString());
+          console.log('✅ [FRONTEND] Tipo de data recibida:', typeof data);
+          console.log('✅ [FRONTEND] Data completa (JSON):', JSON.stringify(data, null, 2));
           break;
         case 'coverage':
-          console.log('📍 Requesting coverage report...');
+          console.log('📍 [FRONTEND] SOLICITANDO COVERAGE REPORT...');
+          console.log('📍 [FRONTEND] Timestamp antes de llamada:', new Date().toISOString());
+          
           data = await reportsService.getCoverageReport();
-          console.log('✅ Coverage report received:', data);
+          
+          console.log('✅ [FRONTEND] ======================== COVERAGE REPORT RECIBIDO ========================');
+          console.log('✅ [FRONTEND] Timestamp después de llamada:', new Date().toISOString());
+          console.log('✅ [FRONTEND] Data completa (JSON):', JSON.stringify(data, null, 2));
           break;
         case 'weekly-schedule':
-          console.log('📅 Requesting weekly schedule report...');
+          console.log('📅 [FRONTEND] SOLICITANDO WEEKLY SCHEDULE REPORT...');
+          console.log('📅 [FRONTEND] Params:', params);
+          
           data = await reportsService.getWeeklySchedule(params);
-          console.log('✅ Weekly schedule report received:', data);
+          
+          console.log('✅ [FRONTEND] ======================== WEEKLY SCHEDULE RECIBIDO ========================');
+          console.log('✅ [FRONTEND] Data completa (JSON):', JSON.stringify(data, null, 2));
           break;
         case 'employee-schedule':
-          console.log('👤 Requesting employee schedule report...');
+          console.log('👤 [FRONTEND] SOLICITANDO EMPLOYEE SCHEDULE REPORT...');
+          console.log('👤 [FRONTEND] Params:', params);
+          
           data = await reportsService.getEmployeeSchedule(params);
-          console.log('✅ Employee schedule report received:', data);
+          
+          console.log('✅ [FRONTEND] ======================== EMPLOYEE SCHEDULE RECIBIDO ========================');
+          console.log('✅ [FRONTEND] Data completa (JSON):', JSON.stringify(data, null, 2));
           break;
         case 'cost-analysis':
-          console.log('💰 Requesting cost analysis report...');
+          console.log('💰 [FRONTEND] SOLICITANDO COST ANALYSIS REPORT...');
+          console.log('💰 [FRONTEND] Params:', params);
+          
           data = await reportsService.getCostAnalysis(params);
-          console.log('✅ Cost analysis report received:', data);
+          
+          console.log('✅ [FRONTEND] ======================== COST ANALYSIS RECIBIDO ========================');
+          console.log('✅ [FRONTEND] Data completa (JSON):', JSON.stringify(data, null, 2));
           break;
         case 'operational-metrics':
-          console.log('📊 Requesting operational metrics report...');
+          console.log('📊 [FRONTEND] SOLICITANDO OPERATIONAL METRICS REPORT...');
+          console.log('📊 [FRONTEND] Params:', params);
+          
           data = await reportsService.getOperationalMetrics(params);
-          console.log('✅ Operational metrics report received:', data);
+          
+          console.log('✅ [FRONTEND] ======================== OPERATIONAL METRICS RECIBIDO ========================');
+          console.log('✅ [FRONTEND] Data completa (JSON):', JSON.stringify(data, null, 2));
           break;
         default:
+          console.log('❌ [FRONTEND] Reporte no reconocido:', selectedReport);
           data = { message: 'Reporte no disponible' };
       }
       
-      console.log('🎯 Setting report data:', data);
+      console.log('🎯 [FRONTEND] ======================== ESTABLECIENDO REPORT DATA ========================');
+      console.log('🎯 [FRONTEND] Datos que se van a establecer en el estado:', data);
+      console.log('🎯 [FRONTEND] Momento de setReportData:', new Date().toISOString());
+      
       setReportData(data);
       setLoadingProgress(100);
+      
+      console.log('✅ [FRONTEND] ======================== ESTADO ACTUALIZADO ========================');
+      console.log('✅ [FRONTEND] reportData debería estar actualizado ahora');
+      console.log('✅ [FRONTEND] loadingProgress establecido a 100%');
     } catch (error: any) {
       console.error('❌ Error generating report:', error);
       console.error('❌ Error details:', error.response?.data || error.message);
@@ -222,9 +283,24 @@ const ReportsPage: React.FC = () => {
   };
 
   const renderReportContent = () => {
-    console.log('🖼️ Rendering report content. Loading:', loading, 'Report data:', reportData);
+    console.log('🖼️ [RENDER] ======================== RENDERIZANDO CONTENIDO ========================');
+    console.log('🖼️ [RENDER] Timestamp:', new Date().toISOString());
+    console.log('🖼️ [RENDER] Loading state:', loading);
+    console.log('🖼️ [RENDER] ReportData state:', reportData);
+    console.log('🖼️ [RENDER] ReportData type:', typeof reportData);
+    console.log('🖼️ [RENDER] ReportData is null/undefined:', reportData == null);
+    
+    if (reportData) {
+      console.log('🖼️ [RENDER] ReportData keys:', Object.keys(reportData));
+      console.log('🖼️ [RENDER] ReportData.summary:', reportData.summary);
+      console.log('🖼️ [RENDER] ReportData.details:', reportData.details);
+      console.log('🖼️ [RENDER] ReportData.details length:', reportData.details?.length);
+      console.log('🖼️ [RENDER] ReportData.error:', reportData.error);
+      console.log('🖼️ [RENDER] ReportData.message:', reportData.message);
+    }
     
     if (loading) {
+      console.log('🖼️ [RENDER] Mostrando loading spinner');
       return (
         <div className="flex flex-col items-center justify-center h-64 space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
@@ -241,10 +317,10 @@ const ReportsPage: React.FC = () => {
             {timeoutWarning && (
               <div className="mt-3 p-3 bg-yellow-900 border border-yellow-600 rounded-lg">
                 <p className="text-yellow-200 text-sm">
-                  ⚠️ El reporte está tardando más de 15 segundos
+                  ⚠️ El reporte está tardando más de 8 segundos
                 </p>
                 <p className="text-yellow-300 text-xs mt-1">
-                  Esto puede deberse a una gran cantidad de datos o conexión lenta
+                  Esto es inusual para la cantidad de datos. Verifica tu conexión.
                 </p>
                 <button 
                   onClick={cancelReport}
@@ -260,7 +336,7 @@ const ReportsPage: React.FC = () => {
     }
 
     if (!reportData) {
-      console.log('⚠️ No report data available');
+      console.log('⚠️ [RENDER] No report data available, mostrando mensaje inicial');
       return (
         <div className="text-center py-12">
           <div className="mb-4">
@@ -276,7 +352,7 @@ const ReportsPage: React.FC = () => {
 
     // Verificar si hay error en la respuesta
     if (reportData.error) {
-      console.log('❌ Report data contains error:', reportData.error);
+      console.log('❌ [RENDER] Report data contains error, mostrando error UI:', reportData.error);
       return (
         <div className="text-center py-12">
           <div className="mb-4">
@@ -332,7 +408,7 @@ const ReportsPage: React.FC = () => {
 
     // Verificar si hay mensaje pero no datos
     if (reportData.message && !reportData.summary && !reportData.details) {
-      console.log('📝 Report data contains only message:', reportData.message);
+      console.log('📝 [RENDER] Report data contains only message, mostrando mensaje:', reportData.message);
       return (
         <div className="text-center py-12">
           <div className="mb-4">
@@ -354,11 +430,22 @@ const ReportsPage: React.FC = () => {
       );
     }
 
-    console.log('📊 Rendering report for type:', selectedReport);
+    console.log('📊 [RENDER] ======================== RENDERIZANDO REPORTE ESPECÍFICO ========================');
+    console.log('📊 [RENDER] Selected report type:', selectedReport);
+    console.log('📊 [RENDER] Datos a renderizar:', reportData);
 
     // Renderizado específico para cada tipo de reporte
     switch (selectedReport) {
       case 'attendance':
+        console.log('📋 [RENDER] ======================== RENDERIZANDO ATTENDANCE REPORT ========================');
+        console.log('📋 [RENDER] Summary data:', reportData.summary);
+        console.log('📋 [RENDER] Details array:', reportData.details);
+        console.log('📋 [RENDER] Details count:', reportData.details?.length || 0);
+        
+        if (reportData.details && Array.isArray(reportData.details)) {
+          console.log('📋 [RENDER] Primeros 3 detalles a renderizar:', reportData.details.slice(0, 3));
+        }
+        
         return (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -395,21 +482,24 @@ const ReportsPage: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {reportData.details?.map((item: any, index: number) => (
-                      <tr key={index} className="border-b border-gray-700 hover:bg-gray-700">
-                        <td className="py-3 px-4 text-white">{item.name}</td>
-                        <td className="py-3 px-4 text-gray-300">{item.station}</td>
-                        <td className="py-3 px-4">
-                          <span className={`px-2 py-1 rounded-full text-xs ${
-                            item.status === 'Presente' ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'
-                          }`}>
-                            {item.status}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-gray-300">{item.checkIn}</td>
-                        <td className="py-3 px-4 text-gray-300">{item.checkOut}</td>
-                      </tr>
-                    ))}
+                    {reportData.details?.map((item: any, index: number) => {
+                      console.log(`📋 [RENDER] Renderizando row ${index}:`, item);
+                      return (
+                        <tr key={index} className="border-b border-gray-700 hover:bg-gray-700">
+                          <td className="py-3 px-4 text-white">{item.name}</td>
+                          <td className="py-3 px-4 text-gray-300">{item.station}</td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-1 rounded-full text-xs ${
+                              item.status === 'Presente' ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'
+                            }`}>
+                              {item.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-gray-300">{item.checkIn}</td>
+                          <td className="py-3 px-4 text-gray-300">{item.checkOut}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -418,6 +508,11 @@ const ReportsPage: React.FC = () => {
         );
 
       case 'overtime':
+        console.log('⏰ [RENDER] ======================== RENDERIZANDO OVERTIME REPORT ========================');
+        console.log('⏰ [RENDER] Summary data:', reportData.summary);
+        console.log('⏰ [RENDER] Details array:', reportData.details);
+        console.log('⏰ [RENDER] Details count:', reportData.details?.length || 0);
+        
         return (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -448,14 +543,17 @@ const ReportsPage: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {reportData.details?.map((item: any, index: number) => (
-                      <tr key={index} className="border-b border-gray-700 hover:bg-gray-700">
-                        <td className="py-3 px-4 text-white">{item.name}</td>
-                        <td className="py-3 px-4 text-gray-300">{item.regularHours}</td>
-                        <td className="py-3 px-4 text-yellow-400 font-medium">{item.overtimeHours}</td>
-                        <td className="py-3 px-4 text-green-400 font-medium">{item.totalPay}</td>
-                      </tr>
-                    ))}
+                    {reportData.details?.map((item: any, index: number) => {
+                      console.log(`⏰ [RENDER] Renderizando overtime row ${index}:`, item);
+                      return (
+                        <tr key={index} className="border-b border-gray-700 hover:bg-gray-700">
+                          <td className="py-3 px-4 text-white">{item.name}</td>
+                          <td className="py-3 px-4 text-gray-300">{item.regularHours}</td>
+                          <td className="py-3 px-4 text-yellow-400 font-medium">{item.overtimeHours}</td>
+                          <td className="py-3 px-4 text-green-400 font-medium">{item.totalPay}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -464,11 +562,18 @@ const ReportsPage: React.FC = () => {
         );
 
       default:
+        console.log('🔧 [RENDER] ======================== RENDERIZANDO DEFAULT/RAW DATA ========================');
+        console.log('🔧 [RENDER] Report type:', selectedReport);
+        console.log('🔧 [RENDER] Mostrando datos raw:', reportData);
+        
         return (
           <div className="card">
-            <pre className="text-gray-300 text-sm overflow-auto">
-              {JSON.stringify(reportData, null, 2)}
-            </pre>
+            <h4 className="text-lg font-semibold text-white mb-4">Datos del Reporte (JSON)</h4>
+            <div className="bg-gray-900 p-4 rounded-lg">
+              <pre className="text-gray-300 text-sm overflow-auto whitespace-pre-wrap">
+                {JSON.stringify(reportData, null, 2)}
+              </pre>
+            </div>
           </div>
         );
     }

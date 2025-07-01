@@ -4,15 +4,15 @@ import type { AxiosInstance, AxiosResponse, AxiosRequestConfig } from 'axios';
 // Configuración base
 const API_BASE_URL = 'http://localhost:3001';
 
-// ⚡ CACHE BUSTER - Updated for optimized timeouts
-const API_VERSION = '2025-07-01-OPTIMIZED-TIMEOUTS-v1';
+// ⚡ CACHE BUSTER - Updated for ultra-fast timeouts
+const API_VERSION = '2025-07-01-ULTRA-FAST-v1';
 console.log(`🚀 API Service loaded - Version: ${API_VERSION}`);
 
-// Configuración de timeouts optimizados
-const EXTENDED_TIMEOUT = 60000; // 1 minuto para reportes (reducido de 10 min)
-const BASE_TIMEOUT = 30000; // 30 segundos para operaciones normales (reducido de 5 min)
+// Configuración de timeouts ultra-optimizados
+const EXTENDED_TIMEOUT = 20000; // 20 segundos para reportes (reducido de 1 min)
+const BASE_TIMEOUT = 10000; // 10 segundos para operaciones normales (reducido de 30s)
 
-console.log(`⏰ Timeouts optimizados - Base: ${BASE_TIMEOUT}ms (${BASE_TIMEOUT/1000}s), Reports: ${EXTENDED_TIMEOUT}ms (${EXTENDED_TIMEOUT/1000}s)`);
+console.log(`⚡ Timeouts ULTRA-OPTIMIZADOS - Base: ${BASE_TIMEOUT}ms (${BASE_TIMEOUT/1000}s), Reports: ${EXTENDED_TIMEOUT}ms (${EXTENDED_TIMEOUT/1000}s) - SIN REINTENTOS`);
 
 // Tipos del backend - usando union types para compatibilidad
 export type UserRole = 'employee' | 'supervisor' | 'manager' | 'president' | 'admin';
@@ -181,7 +181,7 @@ export interface Punch {
 // Configuración de axios con timeout y retry - VERSIÓN ACTUALIZADA
 class ApiService {
   private api: AxiosInstance;
-  private maxRetries: number = 3;
+  private maxRetries: number = 0; // Sin reintentos para mejorar velocidad
   private baseTimeout: number = BASE_TIMEOUT;
   private reportTimeout: number = EXTENDED_TIMEOUT;
 
@@ -265,25 +265,15 @@ class ApiService {
     }
   }
 
-  // Método específico para reportes con timeout extendido
+  // Método específico para reportes con timeout extendido - SIN REINTENTOS
   private async requestWithExtendedTimeout<T>(
-    requestFn: () => Promise<AxiosResponse<T>>,
-    retries: number = 2 // Menos reintentos para reportes pesados
+    requestFn: () => Promise<AxiosResponse<T>>
   ): Promise<T> {
     try {
       const response = await requestFn();
       return response.data;
     } catch (error: any) {
-      if (
-        (error.code === 'ECONNABORTED' || 
-         error.message?.includes('timeout')) &&
-        retries > 0
-      ) {
-        console.log(`🔄 Retrying report request... (${2 - retries + 1}/2) - This may take longer...`);
-        await new Promise(resolve => setTimeout(resolve, 2000 * (2 - retries + 1))); 
-        return this.requestWithExtendedTimeout(requestFn, retries - 1);
-      }
-      
+      // Sin reintentos - fallar rápido para mejorar velocidad
       this.handleApiError(error);
       throw error;
     }
@@ -329,12 +319,13 @@ class ApiService {
     return this.requestWithRetry(() => this.api.patch<T>(url, data, config));
   }
 
-  // Método específico para reportes con timeout extendido - VERSIÓN ACTUALIZADA
+  // Método específico para reportes con timeout extendido - VERSIÓN ULTRA DETALLADA PARA DEBUG
   async getReport<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
     const timestamp = new Date().toISOString();
+    const startTime = Date.now();  // Tiempo más preciso
     const token = localStorage.getItem('auth_token');
     
-    console.log(`🔐 [REPORT-API] ${timestamp} - USANDO TIMEOUT EXTENDIDO`);
+    console.log(`🔐 [REPORT-API] ${timestamp} - INICIANDO REQUEST DE REPORTE`);
     console.log(`🕐 [REPORT-API] Timeout configurado: ${this.reportTimeout}ms (${this.reportTimeout / 1000} segundos)`);
     console.log(`📡 [REPORT-API] URL: ${url}`);
     console.log(`🚀 [REPORT-API] Version: ${API_VERSION}`);
@@ -362,7 +353,106 @@ class ApiService {
       throw new Error('No hay token de autenticación. Por favor, inicia sesión nuevamente.');
     }
     
-    return this.requestWithExtendedTimeout(() => this.api.get<T>(url, extendedConfig));
+    // LOGGING DETALLADO DE LA REQUEST
+    console.log(`🚀 [REPORT-API] INICIANDO REQUEST...`);
+    console.log(`📤 [REPORT-API] URL completa: ${API_BASE_URL}${url}`);
+    console.log(`⏰ [REPORT-API] Timestamp de inicio: ${timestamp}`);
+    
+    try {
+      console.log(`📤 [REPORT-API] ======================== ENVIANDO AXIOS REQUEST ========================`);
+      console.log(`📤 [REPORT-API] Momento justo antes de axios.get: ${new Date().toISOString()}`);
+      
+      const response = await this.api.get<T>(url, extendedConfig);
+      
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      
+      console.log(`✅ [REPORT-API] ======================== RESPUESTA RECIBIDA! ========================`);
+      console.log(`✅ [REPORT-API] Momento de recepción: ${new Date().toISOString()}`);
+      console.log(`⏱️ [REPORT-API] Duración total: ${duration}ms (${(duration / 1000).toFixed(2)}s)`);
+      console.log(`📊 [REPORT-API] Status: ${response.status} ${response.statusText || ''}`);
+      console.log(`📦 [REPORT-API] Response headers:`, response.headers);
+      console.log(`📋 [REPORT-API] Response data type:`, typeof response.data);
+      console.log(`� [REPORT-API] Response data size:`, JSON.stringify(response.data || {}).length, 'caracteres');
+      
+      if (response.data && typeof response.data === 'object') {
+        const data = response.data as any;
+        console.log(`🔍 [REPORT-API] ======================== ANÁLISIS DE DATOS ========================`);
+        console.log(`🔍 [REPORT-API] Keys en response.data:`, Object.keys(data));
+        console.log(`📊 [REPORT-API] Summary presente:`, !!data.summary);
+        console.log(`📊 [REPORT-API] Details presente:`, !!data.details);
+        console.log(`📊 [REPORT-API] Details count:`, data.details?.length || 0);
+        
+        if (data.summary) {
+          console.log(`📊 [REPORT-API] Summary completo:`, data.summary);
+          console.log(`📊 [REPORT-API] Summary keys:`, Object.keys(data.summary));
+        }
+        
+        if (data.details && Array.isArray(data.details)) {
+          console.log(`👥 [REPORT-API] Details es array: true, longitud: ${data.details.length}`);
+          if (data.details.length > 0) {
+            console.log(`� [REPORT-API] Primer record:`, data.details[0]);
+            console.log(`👥 [REPORT-API] Keys del primer record:`, Object.keys(data.details[0] || {}));
+            if (data.details.length > 1) {
+              console.log(`� [REPORT-API] Último record:`, data.details[data.details.length - 1]);
+            }
+          }
+        } else {
+          console.log(`❌ [REPORT-API] Details NO es array o está vacío:`, data.details);
+        }
+        
+        // Verificar estructura específica esperada por el frontend
+        const hasExpectedStructure = data.summary && data.details && Array.isArray(data.details);
+        console.log(`✅ [REPORT-API] Estructura válida para el frontend:`, hasExpectedStructure);
+        
+      } else {
+        console.warn(`⚠️ [REPORT-API] Datos no son objeto:`, response.data);
+      }
+      
+      console.log(`🎯 [REPORT-API] ======================== RETORNANDO AL FRONTEND ========================`);
+      console.log(`🎯 [REPORT-API] Datos a retornar:`, response.data);
+      
+      return response.data;
+      
+    } catch (error: any) {
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      
+      console.error(`❌ [REPORT-API] ======================== ERROR EN REQUEST ========================`);
+      console.error(`❌ [REPORT-API] Momento del error: ${new Date().toISOString()}`);
+      console.error(`❌ [REPORT-API] Duración antes del error: ${duration}ms (${(duration / 1000).toFixed(2)}s)`);
+      console.error(`🚨 [REPORT-API] Error completo:`, {
+        errorType: error.constructor.name,
+        message: error.message,
+        code: error.code,
+        stack: error.stack,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        responseHeaders: error.response?.headers,
+        responseData: error.response?.data,
+        isTimeout: error.code === 'ECONNABORTED' || error.message.includes('timeout'),
+        configTimeout: extendedConfig.timeout,
+        url: url,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Análisis específico del tipo de error
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        console.error(`⏰ [REPORT-API] ERROR DE TIMEOUT detectado después de ${duration}ms`);
+        console.error(`⏰ [REPORT-API] Timeout configurado era: ${extendedConfig.timeout}ms`);
+      } else if (error.response) {
+        console.error(`🔴 [REPORT-API] El servidor respondió con error ${error.response.status}`);
+        console.error(`🔴 [REPORT-API] Datos del error:`, error.response.data);
+      } else if (error.request) {
+        console.error(`📡 [REPORT-API] Request enviado pero SIN RESPUESTA del servidor`);
+        console.error(`📡 [REPORT-API] Request object:`, error.request);
+      } else {
+        console.error(`❌ [REPORT-API] Error en configuración de request:`, error.message);
+      }
+      
+      // Re-throw el error para que sea manejado por el frontend
+      throw error;
+    }
   }
 }
 
@@ -479,10 +569,10 @@ export const authService = {
 export const reportsService = {
   async getAttendanceReport(params: ReportParams): Promise<any> {
     try {
-      console.log(`🎯 [ATTENDANCE-REPORT] INICIANDO REPORTE DE ASISTENCIA`);
+      console.log(`🎯 [ATTENDANCE-REPORT] ======================== INICIANDO REPORTE ========================`);
       console.log(`📊 [ATTENDANCE-REPORT] Versión API: ${API_VERSION}`);
-      console.log(`📊 [ATTENDANCE-REPORT] Parámetros:`, params);
-      console.log(`📊 [ATTENDANCE-REPORT] Usando método getReport con timeout extendido`);
+      console.log(`📊 [ATTENDANCE-REPORT] Parámetros recibidos:`, params);
+      console.log(`📊 [ATTENDANCE-REPORT] Timestamp de inicio:`, new Date().toISOString());
       
       const queryParams = new URLSearchParams();
       queryParams.append('startDate', params.startDate);
@@ -492,19 +582,49 @@ export const reportsService = {
       }
 
       const url = `/reports/attendance?${queryParams.toString()}`;
-      console.log(`📊 [ATTENDANCE-REPORT] URL completa:`, url);
+      console.log(`📊 [ATTENDANCE-REPORT] URL construida:`, url);
+      console.log(`📊 [ATTENDANCE-REPORT] Query params:`, Object.fromEntries(queryParams.entries()));
       
+      console.log(`📤 [ATTENDANCE-REPORT] Llamando a apiService.getReport...`);
       const response = await apiService.getReport<any>(url);
-      console.log(`✅ [ATTENDANCE-REPORT] Reporte recibido exitosamente:`, response);
+      
+      console.log(`✅ [ATTENDANCE-REPORT] ======================== RESPUESTA RECIBIDA ========================`);
+      console.log(`✅ [ATTENDANCE-REPORT] Timestamp de respuesta:`, new Date().toISOString());
+      console.log(`✅ [ATTENDANCE-REPORT] Tipo de respuesta:`, typeof response);
+      console.log(`✅ [ATTENDANCE-REPORT] Respuesta es null/undefined:`, response == null);
+      console.log(`✅ [ATTENDANCE-REPORT] Keys de respuesta:`, response ? Object.keys(response) : 'no data');
+      
+      if (response && typeof response === 'object') {
+        console.log(`✅ [ATTENDANCE-REPORT] Verificando estructura...`);
+        console.log(`✅ [ATTENDANCE-REPORT] Tiene summary:`, !!response.summary);
+        console.log(`✅ [ATTENDANCE-REPORT] Tiene details:`, !!response.details);
+        console.log(`✅ [ATTENDANCE-REPORT] Details es array:`, Array.isArray(response.details));
+        console.log(`✅ [ATTENDANCE-REPORT] Details length:`, response.details?.length || 0);
+        
+        if (response.summary) {
+          console.log(`✅ [ATTENDANCE-REPORT] Summary data:`, response.summary);
+        }
+        
+        if (response.details && Array.isArray(response.details) && response.details.length > 0) {
+          console.log(`✅ [ATTENDANCE-REPORT] Primer detalle:`, response.details[0]);
+          console.log(`✅ [ATTENDANCE-REPORT] Total detalles:`, response.details.length);
+        }
+      }
+      
+      console.log(`🎯 [ATTENDANCE-REPORT] ======================== RETORNANDO AL FRONTEND ========================`);
+      console.log(`🎯 [ATTENDANCE-REPORT] Datos finales:`, response);
+      
       return response;
     } catch (error: any) {
-      console.error(`❌ [ATTENDANCE-REPORT] ERROR AL OBTENER REPORTE:`, {
+      console.error(`❌ [ATTENDANCE-REPORT] ======================== ERROR ========================`);
+      console.error(`❌ [ATTENDANCE-REPORT] Timestamp del error:`, new Date().toISOString());
+      console.error(`❌ [ATTENDANCE-REPORT] Error completo:`, {
         message: error.message,
         code: error.code,
         status: error.response?.status,
+        responseData: error.response?.data,
         params,
         isTimeout: error.code === 'ECONNABORTED',
-        timestamp: new Date().toISOString(),
         version: API_VERSION
       });
       
