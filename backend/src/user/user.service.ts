@@ -26,6 +26,14 @@ export class UserService {
       throw new ConflictException('El email ya está registrado en el sistema');
     }
 
+    // Validar que los empleados, supervisores y managers tengan estación asignada
+    // Solo presidentes y administradores pueden no tener estación (admin maneja todo el sistema)
+    if (createUserDto.role !== UserRole.PRESIDENT && 
+        createUserDto.role !== UserRole.ADMIN && 
+        !createUserDto.stationId) {
+      throw new BadRequestException('Los empleados, supervisores y managers deben tener una estación asignada');
+    }
+
     try {
       // Encriptar la contraseña
       const hashedPassword = await bcrypt.hash(createUserDto.password, 12);
@@ -44,7 +52,7 @@ export class UserService {
       return userResponse as User;
       
     } catch (error) {
-      if (error instanceof ConflictException) {
+      if (error instanceof ConflictException || error instanceof BadRequestException) {
         throw error;
       }
       throw new BadRequestException('Error al crear el usuario: ' + error.message);
@@ -176,7 +184,7 @@ export class UserService {
 
     // Restricciones por rol
     if (currentUser) {
-      // SUPERVISOR: solo puede editar empleados que supervisa
+      // SUPERVISOR: solo puede asignar responsabilidades a empleados que supervisa
       if (currentUser.role === UserRole.SUPERVISOR) {
         if (
           existingUser.role !== UserRole.EMPLOYEE ||
@@ -184,28 +192,58 @@ export class UserService {
         ) {
           throw new ConflictException('No tiene permisos para editar este usuario');
         }
+        // Supervisor NO puede cambiar: nombre, email, categoría, stationId, role
+        const allowedFields = ['password']; // Solo campos de responsabilidades/asignaciones
+        const filteredDto = {};
+        allowedFields.forEach(field => {
+          if (updateUserDto[field]) {
+            filteredDto[field] = updateUserDto[field];
+          }
+        });
+        updateUserDto = filteredDto as UpdateUserDto;
       }
 
-      // MANAGER: solo puede editar empleados de su estación
+      // MANAGER: puede editar empleados y supervisores de su estación (más permisos que supervisor)
       if (currentUser.role === UserRole.MANAGER) {
+        // Manager puede editar empleados y supervisores de su estación
         if (
-          existingUser.role !== UserRole.EMPLOYEE ||
+          (existingUser.role !== UserRole.EMPLOYEE && existingUser.role !== UserRole.SUPERVISOR) ||
           existingUser.stationId !== currentUser.stationId
         ) {
           throw new ConflictException('No tiene permisos para editar este usuario');
         }
-        // No puede cambiar el stationId ni el rol
-        if ('stationId' in updateUserDto || 'role' in updateUserDto) {
-          delete updateUserDto.stationId;
+        // Manager puede cambiar: nombre, email, categoría, stationId de empleados y supervisores, pero NO role
+        if ('role' in updateUserDto) {
           delete updateUserDto.role;
         }
       }
 
-      // ADMIN: puede editar cualquier usuario y cambiar stationId de managers/supervisores
+      // ADMIN: puede editar cualquier usuario y asignar stationId a managers/supervisores
       if (currentUser.role === UserRole.ADMIN) {
-        // Puede cambiar stationId de managers y supervisores
-        // (No se requiere lógica extra aquí, solo asegurarse que el admin puede hacerlo)
+        // Admin puede cambiar todo, incluyendo stationId de managers y supervisores
+        // Solo no puede cambiar role de PRESIDENT o crear PRESIDENT
+        if (updateUserDto.role === UserRole.PRESIDENT) {
+          throw new ConflictException('No puede asignar rol de Presidente');
+        }
+        if (existingUser.role === UserRole.PRESIDENT) {
+          throw new ConflictException('No puede editar al Presidente');
+        }
       }
+
+      // PRESIDENT: solo puede visualizar, no puede editar nada
+      if (currentUser.role === UserRole.PRESIDENT) {
+        throw new ConflictException('El Presidente solo tiene permisos de visualización');
+      }
+    }
+
+    // Validar que los empleados, supervisores y managers tengan estación asignada
+    // Solo presidentes y administradores pueden no tener estación
+    if (updateUserDto.role && 
+        updateUserDto.role !== UserRole.PRESIDENT && 
+        updateUserDto.role !== UserRole.ADMIN && 
+        !updateUserDto.stationId && 
+        !existingUser.stationId) {
+      throw new BadRequestException('Los empleados, supervisores y managers deben tener una estación asignada');
     }
 
     // Si se está actualizando el email, verificar que no exista otro usuario con ese email

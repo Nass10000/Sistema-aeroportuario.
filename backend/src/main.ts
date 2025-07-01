@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { UserService } from './user/user.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -33,6 +34,16 @@ async function bootstrap() {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
+
+  // Inicializar datos de prueba
+  try {
+    const userService = app.get(UserService);
+    await userService.initializeTestUsers();
+    
+    console.log('✅ Test data initialization completed');
+  } catch (error) {
+    console.warn('⚠️ Test data initialization failed:', error.message);
+  }
 
   await app.listen(3001);
   console.log('Backend started on port 3001');

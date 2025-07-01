@@ -20,7 +20,7 @@ import { NotificationModule } from './notification/notification.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ReportsModule } from './reports/reports.module';
 import { SchedulingModule } from './scheduling/scheduling.module';
-import { SecurityMiddleware } from './common/middleware/security.middleware'; // <--- SOLO descomenta esta línea
+import { SecurityMiddleware } from './common/middleware/security.middleware';
 
 @Module({
   imports: [
@@ -53,6 +53,7 @@ import { SecurityMiddleware } from './common/middleware/security.middleware'; //
     ReportsModule,
     SchedulingModule,
   ],
+  providers: [],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

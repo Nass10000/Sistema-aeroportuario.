@@ -16,7 +16,7 @@ export class ReportsController {
 
   @Get('attendance')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT)
+  @Roles(UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT)
   async getAttendanceReport(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
@@ -31,7 +31,9 @@ export class ReportsController {
     );
 
     if (format === 'csv' && res) {
-      const csv = await this.reportsService.exportToCSV(data, 'attendance-report');
+      // Para CSV, usar solo los detalles del reporte (que es un array)
+      const csvData = Array.isArray(data) ? data : data.details || [];
+      const csv = await this.reportsService.exportToCSV(csvData, 'attendance-report');
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename=attendance-report.csv');
       return res.send(csv);
@@ -42,7 +44,7 @@ export class ReportsController {
 
   @Get('overtime')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT)
+  @Roles(UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT)
   async getOvertimeReport(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
@@ -57,7 +59,9 @@ export class ReportsController {
     );
 
     if (format === 'csv' && res) {
-      const csv = await this.reportsService.exportToCSV(data, 'overtime-report');
+      // Para CSV, usar solo los detalles del reporte (que es un array)
+      const csvData = Array.isArray(data) ? data : data.details || [];
+      const csv = await this.reportsService.exportToCSV(csvData, 'overtime-report');
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename=overtime-report.csv');
       return res.send(csv);
@@ -68,7 +72,7 @@ export class ReportsController {
 
   @Get('coverage')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT)
+  @Roles(UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT)
   async getStationCoverageReport(
     @Query('format') format: string = 'json',
     @Res() res?: Response
@@ -87,7 +91,7 @@ export class ReportsController {
 
   @Get('weekly-schedule')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT)
+  @Roles(UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT)
   async getWeeklyScheduleReport(
     @Query('weekStartDate') weekStartDate: string,
     @Query('stationId') stationId?: string,
@@ -111,7 +115,7 @@ export class ReportsController {
 
   @Get('employee-schedule')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT, UserRole.EMPLOYEE) // Empleados pueden ver su propio horario, supervisores y gerentes pueden ver de su equipo
+  @Roles(UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT, UserRole.EMPLOYEE) // Empleados pueden ver su propio horario, supervisores y gerentes pueden ver de su equipo
   async getEmployeeScheduleReport(
     @Query('employeeId') employeeId: string,
     @Query('startDate') startDate: string,
@@ -137,7 +141,7 @@ export class ReportsController {
 
   @Get('cost-analysis')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.MANAGER, UserRole.PRESIDENT)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.PRESIDENT)
   async getCostAnalysisReport(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
@@ -152,7 +156,9 @@ export class ReportsController {
     );
 
     if (format === 'csv' && res) {
-      const csv = await this.reportsService.exportToCSV(data, 'cost-analysis');
+      // Para CSV, usar solo los detalles del reporte (que es un array)
+      const csvData = Array.isArray(data) ? data : data.details || [];
+      const csv = await this.reportsService.exportToCSV(csvData, 'cost-analysis');
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename=cost-analysis.csv');
       return res.send(csv);
@@ -163,7 +169,7 @@ export class ReportsController {
 
   @Get('operational-metrics')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.MANAGER, UserRole.PRESIDENT)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.PRESIDENT)
   async getOperationalMetrics(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string
