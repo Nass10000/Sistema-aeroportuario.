@@ -7,6 +7,9 @@ const ReportsPage: React.FC = () => {
   const [reportData, setReportData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [timeoutWarning, setTimeoutWarning] = useState(false);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [dateRange, setDateRange] = useState({
     startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0]
@@ -57,7 +60,49 @@ const ReportsPage: React.FC = () => {
       return;
     }
 
+    // Verificar token de autenticación
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      setReportData({ error: 'No hay token de autenticación. Por favor, inicia sesión nuevamente.' });
+      setLoading(false);
+      return;
+    }
+
+    console.log('🔑 Auth token check:', { 
+      hasToken: !!token, 
+      tokenLength: token?.length, 
+      tokenPreview: token ? `${token.substring(0, 20)}...` : 'none' 
+    });
+
+    // Cancelar cualquier petición anterior
+    if (abortController) {
+      abortController.abort();
+    }
+
+    // Crear nuevo AbortController
+    const newAbortController = new AbortController();
+    setAbortController(newAbortController);
+
     setLoading(true);
+    setReportData(null);
+    setTimeoutWarning(false);
+    setLoadingProgress(0);
+    
+    console.log('🔄 Generating report:', selectedReport, 'with params:', dateRange, 'stationId:', stationId);
+
+    // Mostrar advertencia de timeout después de 15 segundos (reducido de 30)
+    const timeoutTimer = setTimeout(() => {
+      setTimeoutWarning(true);
+    }, 15000);
+
+    // Simular progreso de carga más rápido
+    const progressTimer = setInterval(() => {
+      setLoadingProgress(prev => {
+        if (prev >= 85) return prev; // Detener antes del 100%
+        return prev + Math.random() * 15; // Incrementos más grandes
+      });
+    }, 1000); // Actualizar cada segundo
+    
     try {
       let data;
       const params: ReportParams = { ...dateRange };
@@ -69,37 +114,84 @@ const ReportsPage: React.FC = () => {
         params.stationId = stationId;
       }
 
+      console.log('📊 Final params for report:', params);
+
       switch (selectedReport) {
         case 'attendance':
+          console.log('📋 Requesting attendance report...');
           data = await reportsService.getAttendanceReport(params);
+          console.log('✅ Attendance report received:', data);
           break;
         case 'overtime':
+          console.log('⏰ Requesting overtime report...');
           data = await reportsService.getOvertimeReport(params);
+          console.log('✅ Overtime report received:', data);
           break;
         case 'coverage':
+          console.log('📍 Requesting coverage report...');
           data = await reportsService.getCoverageReport();
+          console.log('✅ Coverage report received:', data);
           break;
         case 'weekly-schedule':
+          console.log('📅 Requesting weekly schedule report...');
           data = await reportsService.getWeeklySchedule(params);
+          console.log('✅ Weekly schedule report received:', data);
           break;
         case 'employee-schedule':
+          console.log('👤 Requesting employee schedule report...');
           data = await reportsService.getEmployeeSchedule(params);
+          console.log('✅ Employee schedule report received:', data);
           break;
         case 'cost-analysis':
+          console.log('💰 Requesting cost analysis report...');
           data = await reportsService.getCostAnalysis(params);
+          console.log('✅ Cost analysis report received:', data);
           break;
         case 'operational-metrics':
+          console.log('📊 Requesting operational metrics report...');
           data = await reportsService.getOperationalMetrics(params);
+          console.log('✅ Operational metrics report received:', data);
           break;
         default:
           data = { message: 'Reporte no disponible' };
       }
+      
+      console.log('🎯 Setting report data:', data);
       setReportData(data);
-    } catch (error) {
-      console.error('Error generating report:', error);
-      setReportData(generateMockData(selectedReport));
+      setLoadingProgress(100);
+    } catch (error: any) {
+      console.error('❌ Error generating report:', error);
+      console.error('❌ Error details:', error.response?.data || error.message);
+      console.error('❌ Error status:', error.response?.status);
+      
+      // Manejar errores específicos
+      if (error.name === 'AbortError') {
+        setReportData({ message: 'Reporte cancelado por el usuario' });
+      } else if (error.response?.status === 401) {
+        setReportData({ 
+          error: '🔐 Error de autenticación. Tu sesión ha expirado.',
+          suggestion: 'Por favor, inicia sesión nuevamente para acceder a los reportes.',
+          isAuthError: true 
+        });
+      } else if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        setReportData({ 
+          error: 'El reporte tardó demasiado en generarse. Intenta con un rango de fechas más pequeño o verifica tu conexión.',
+          isTimeout: true 
+        });
+      } else {
+        setReportData({ 
+          error: 'Error al generar el reporte: ' + (error.response?.data?.message || error.message),
+          suggestion: 'Intenta nuevamente o contacta al administrador si el problema persiste.'
+        });
+      }
     } finally {
+      clearTimeout(timeoutTimer);
+      clearInterval(progressTimer);
       setLoading(false);
+      setTimeoutWarning(false);
+      setLoadingProgress(0);
+      setAbortController(null);
+      console.log('🏁 Report generation finished');
     }
   };
 
@@ -111,30 +203,158 @@ const ReportsPage: React.FC = () => {
   useEffect(() => {
     // Inicializar usuario actual
     const user = authService.getCurrentUser();
+    console.log('👤 Current user from localStorage:', user);
+    console.log('👤 User role:', user?.role);
+    console.log('👤 Can access reports:', user?.role === 'admin' || user?.role === 'manager' || user?.role === 'supervisor' || user?.role === 'president');
     setCurrentUser(user);
   }, []);
 
-  useEffect(() => {
-    generateReport();
-  }, [selectedReport, stationId]);
+  // Removed automatic report generation - now only manual via button click
+
+  const cancelReport = () => {
+    if (abortController) {
+      abortController.abort();
+      setLoading(false);
+      setTimeoutWarning(false);
+      setLoadingProgress(0);
+      setReportData({ message: 'Reporte cancelado por el usuario' });
+    }
+  };
 
   const renderReportContent = () => {
+    console.log('🖼️ Rendering report content. Loading:', loading, 'Report data:', reportData);
+    
     if (loading) {
       return (
-        <div className="flex items-center justify-center h-64">
+        <div className="flex flex-col items-center justify-center h-64 space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-          <span className="ml-4 text-gray-400">Generando reporte...</span>
+          <div className="text-center">
+            <span className="text-gray-400 block">Generando reporte...</span>
+            {loadingProgress > 0 && (
+              <div className="w-64 bg-gray-700 rounded-full h-2 mt-2">
+                <div 
+                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${Math.min(loadingProgress, 100)}%` }}
+                ></div>
+              </div>
+            )}
+            {timeoutWarning && (
+              <div className="mt-3 p-3 bg-yellow-900 border border-yellow-600 rounded-lg">
+                <p className="text-yellow-200 text-sm">
+                  ⚠️ El reporte está tardando más de 15 segundos
+                </p>
+                <p className="text-yellow-300 text-xs mt-1">
+                  Esto puede deberse a una gran cantidad de datos o conexión lenta
+                </p>
+                <button 
+                  onClick={cancelReport}
+                  className="mt-2 px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-yellow-100 text-xs rounded"
+                >
+                  Cancelar Reporte
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       );
     }
 
     if (!reportData) {
+      console.log('⚠️ No report data available');
       return (
         <div className="text-center py-12">
-          <p className="text-gray-400">Selecciona un tipo de reporte para comenzar</p>
+          <div className="mb-4">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 48 48">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m6 0h6m-6 6v6m-6-6v6m6-6v6" />
+            </svg>
+          </div>
+          <p className="text-gray-400 text-lg">Selecciona un tipo de reporte y haz clic en "Actualizar Reporte"</p>
+          <p className="text-gray-500 text-sm mt-2">Los reportes se generan en tiempo real con tus datos actuales</p>
         </div>
       );
     }
+
+    // Verificar si hay error en la respuesta
+    if (reportData.error) {
+      console.log('❌ Report data contains error:', reportData.error);
+      return (
+        <div className="text-center py-12">
+          <div className="mb-4">
+            <svg className="mx-auto h-12 w-12 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 48 48">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <p className="text-red-400 text-lg font-semibold">Error al generar el reporte</p>
+          <p className="text-red-300 mt-2">{reportData.error}</p>
+          {reportData.suggestion && (
+            <p className="text-gray-400 text-sm mt-2">{reportData.suggestion}</p>
+          )}
+          {reportData.isTimeout && (
+            <div className="mt-4 p-4 bg-orange-900 border border-orange-600 rounded-lg text-left max-w-md mx-auto">
+              <p className="text-orange-200 font-semibold">💡 Sugerencias:</p>
+              <ul className="text-orange-300 text-sm mt-2 space-y-1">
+                <li>• Reduce el rango de fechas</li>
+                <li>• Filtra por una estación específica</li>
+                <li>• Verifica tu conexión a internet</li>
+                <li>• Intenta nuevamente en un momento</li>
+              </ul>
+            </div>
+          )}
+          {reportData.isAuthError && (
+            <div className="mt-4 p-4 bg-red-900 border border-red-600 rounded-lg text-left max-w-md mx-auto">
+              <p className="text-red-200 font-semibold">🔐 Problema de Autenticación:</p>
+              <ul className="text-red-300 text-sm mt-2 space-y-1">
+                <li>• Tu sesión ha expirado</li>
+                <li>• Necesitas iniciar sesión nuevamente</li>
+                <li>• El token de autenticación no es válido</li>
+              </ul>
+              <button 
+                onClick={() => {
+                  localStorage.removeItem('auth_token');
+                  localStorage.removeItem('user');
+                  window.location.href = '/login';
+                }}
+                className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 text-red-100 text-sm rounded"
+              >
+                Ir a Login
+              </button>
+            </div>
+          )}
+          <button 
+            onClick={generateReport}
+            className="mt-4 btn-primary"
+          >
+            Reintentar
+          </button>
+        </div>
+      );
+    }
+
+    // Verificar si hay mensaje pero no datos
+    if (reportData.message && !reportData.summary && !reportData.details) {
+      console.log('📝 Report data contains only message:', reportData.message);
+      return (
+        <div className="text-center py-12">
+          <div className="mb-4">
+            <svg className="mx-auto h-12 w-12 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 48 48">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-1h1v1zm0 0v6m6-6v6m6-6v6m-6-6h6m-6 0H13m6 0h6" />
+            </svg>
+          </div>
+          <p className="text-yellow-400 text-lg">{reportData.message}</p>
+          <p className="text-gray-400 text-sm mt-2">
+            Esto puede significar que no hay datos para el período seleccionado
+          </p>
+          <button 
+            onClick={generateReport}
+            className="mt-4 btn-secondary"
+          >
+            Actualizar Reporte
+          </button>
+        </div>
+      );
+    }
+
+    console.log('📊 Rendering report for type:', selectedReport);
 
     // Renderizado específico para cada tipo de reporte
     switch (selectedReport) {

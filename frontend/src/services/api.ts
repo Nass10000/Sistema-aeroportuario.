@@ -4,15 +4,15 @@ import type { AxiosInstance, AxiosResponse, AxiosRequestConfig } from 'axios';
 // Configuración base
 const API_BASE_URL = 'http://localhost:3001';
 
-// ⚡ CACHE BUSTER - Updated for timeout fix
-const API_VERSION = '2025-07-01-TIMEOUT-FIX-v2';
+// ⚡ CACHE BUSTER - Updated for optimized timeouts
+const API_VERSION = '2025-07-01-OPTIMIZED-TIMEOUTS-v1';
 console.log(`🚀 API Service loaded - Version: ${API_VERSION}`);
 
-// Configuración de timeouts aumentados
-const EXTENDED_TIMEOUT = 600000; // 10 minutos para reportes
-const BASE_TIMEOUT = 300000; // 5 minutos para operaciones normales
+// Configuración de timeouts optimizados
+const EXTENDED_TIMEOUT = 60000; // 1 minuto para reportes (reducido de 10 min)
+const BASE_TIMEOUT = 30000; // 30 segundos para operaciones normales (reducido de 5 min)
 
-console.log(`⏰ Timeouts configured - Base: ${BASE_TIMEOUT}ms, Reports: ${EXTENDED_TIMEOUT}ms`);
+console.log(`⏰ Timeouts optimizados - Base: ${BASE_TIMEOUT}ms (${BASE_TIMEOUT/1000}s), Reports: ${EXTENDED_TIMEOUT}ms (${EXTENDED_TIMEOUT/1000}s)`);
 
 // Tipos del backend - usando union types para compatibilidad
 export type UserRole = 'employee' | 'supervisor' | 'manager' | 'president' | 'admin';
@@ -186,7 +186,7 @@ class ApiService {
   private reportTimeout: number = EXTENDED_TIMEOUT;
 
   constructor() {
-    console.log(`🔧 Creating ApiService with timeouts - Base: ${this.baseTimeout}ms, Reports: ${this.reportTimeout}ms`);
+    console.log(`🔧 Creating ApiService with optimized timeouts - Base: ${this.baseTimeout}ms (${this.baseTimeout/1000}s), Reports: ${this.reportTimeout}ms (${this.reportTimeout/1000}s)`);
     
     this.api = axios.create({
       baseURL: API_BASE_URL,
@@ -332,17 +332,35 @@ class ApiService {
   // Método específico para reportes con timeout extendido - VERSIÓN ACTUALIZADA
   async getReport<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
     const timestamp = new Date().toISOString();
-    console.log(`� [REPORT-API] ${timestamp} - USANDO TIMEOUT EXTENDIDO`);
-    console.log(`🕐 [REPORT-API] Timeout configurado: ${this.reportTimeout}ms (${this.reportTimeout / 60000} minutos)`);
+    const token = localStorage.getItem('auth_token');
+    
+    console.log(`🔐 [REPORT-API] ${timestamp} - USANDO TIMEOUT EXTENDIDO`);
+    console.log(`🕐 [REPORT-API] Timeout configurado: ${this.reportTimeout}ms (${this.reportTimeout / 1000} segundos)`);
     console.log(`📡 [REPORT-API] URL: ${url}`);
     console.log(`🚀 [REPORT-API] Version: ${API_VERSION}`);
+    console.log(`🔑 [REPORT-API] Token presente: ${!!token} (longitud: ${token?.length || 0})`);
     
+    // CRÍTICO: Asegurar que el Authorization header esté presente
     const extendedConfig = {
       ...config,
       timeout: this.reportTimeout,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : '',
+        ...config?.headers,
+      }
     };
     
-    console.log(`⚡ [REPORT-API] Config aplicado:`, { timeout: extendedConfig.timeout });
+    console.log(`⚡ [REPORT-API] Config aplicado:`, { 
+      timeout: extendedConfig.timeout,
+      hasAuthHeader: !!extendedConfig.headers?.Authorization,
+      authHeaderPreview: extendedConfig.headers?.Authorization ? `Bearer ${token?.substring(0, 10)}...` : 'none'
+    });
+    
+    if (!token) {
+      console.error('❌ [REPORT-API] NO HAY TOKEN DE AUTENTICACIÓN!');
+      throw new Error('No hay token de autenticación. Por favor, inicia sesión nuevamente.');
+    }
     
     return this.requestWithExtendedTimeout(() => this.api.get<T>(url, extendedConfig));
   }
@@ -382,11 +400,26 @@ export const authService = {
       localStorage.setItem('auth_token', access_token);
       localStorage.setItem('user', JSON.stringify(user));
 
+      // ✅ VERIFICACIÓN CRÍTICA: Confirmar que el token se guardó correctamente
+      const savedToken = localStorage.getItem('auth_token');
+      const savedUser = localStorage.getItem('user');
+      
       console.log('💾 AuthService: Data saved to localStorage:', {
-        tokenSaved: !!localStorage.getItem('auth_token'),
-        userSaved: !!localStorage.getItem('user'),
-        tokenLength: access_token.length
+        tokenSaved: !!savedToken,
+        userSaved: !!savedUser,
+        tokenLength: access_token.length,
+        savedTokenLength: savedToken?.length || 0,
+        tokensMatch: savedToken === access_token,
+        tokenPreview: `${access_token.substring(0, 20)}...`,
+        savedTokenPreview: savedToken ? `${savedToken.substring(0, 20)}...` : 'none'
       });
+
+      if (savedToken !== access_token) {
+        console.error('❌ AuthService: TOKEN MISMATCH! Token not saved correctly');
+        throw new Error('Error saving authentication token');
+      }
+
+      console.log('✅ AuthService: Authentication token verified and saved successfully');
 
       // Conectar WebSocket después del login exitoso
       setTimeout(() => {
@@ -477,7 +510,7 @@ export const reportsService = {
       
       // Error más específico según el tipo
       if (error.code === 'ECONNABORTED') {
-        throw new Error(`⏰ TIMEOUT (${API_VERSION}): El reporte de asistencia excedió el tiempo límite de ${EXTENDED_TIMEOUT / 60000} minutos. Intente con un rango de fechas menor.`);
+        throw new Error(`⏰ TIMEOUT (${API_VERSION}): El reporte de asistencia excedió el tiempo límite de ${EXTENDED_TIMEOUT / 1000} segundos. Intente con un rango de fechas menor.`);
       } else if (error.response?.status === 500) {
         throw new Error(`🚨 ERROR SERVIDOR: Error interno del servidor al generar el reporte. Versión: ${API_VERSION}`);
       } else if (error.response?.status === 404) {
@@ -510,7 +543,7 @@ export const reportsService = {
       });
       
       if (error.code === 'ECONNABORTED') {
-        throw new Error('El reporte de horas extra está tardando mucho en generarse. Por favor, intente con un rango de fechas menor.');
+        throw new Error(`⏰ TIMEOUT: El reporte de horas extra excedió ${EXTENDED_TIMEOUT / 1000} segundos. Intente con un rango de fechas menor.`);
       } else if (error.response?.status === 500) {
         throw new Error('Error interno del servidor al generar el reporte de horas extra. Por favor, intente nuevamente.');
       } else {
@@ -590,7 +623,7 @@ export const reportsService = {
       });
       
       if (error.code === 'ECONNABORTED') {
-        throw new Error('El horario del empleado está tardando mucho en generarse. Por favor, intente con un rango de fechas menor.');
+        throw new Error(`⏰ TIMEOUT: El horario del empleado excedió ${EXTENDED_TIMEOUT / 1000} segundos. Intente con un rango de fechas menor.`);
       } else {
         throw new Error(error.response?.data?.message || 'Error al obtener horario del empleado');
       }
@@ -619,7 +652,7 @@ export const reportsService = {
       });
       
       if (error.code === 'ECONNABORTED') {
-        throw new Error('El análisis de costos está tardando mucho en generarse. Por favor, intente con un rango de fechas menor.');
+        throw new Error(`⏰ TIMEOUT: El análisis de costos excedió ${EXTENDED_TIMEOUT / 1000} segundos. Intente con un rango de fechas menor.`);
       } else {
         throw new Error(error.response?.data?.message || 'Error al obtener análisis de costos');
       }
@@ -645,7 +678,7 @@ export const reportsService = {
       });
       
       if (error.code === 'ECONNABORTED') {
-        throw new Error('Las métricas operacionales están tardando mucho en generarse. Por favor, intente con un rango de fechas menor.');
+        throw new Error(`⏰ TIMEOUT: Las métricas operacionales excedieron ${EXTENDED_TIMEOUT / 1000} segundos. Intente con un rango de fechas menor.`);
       } else {
         throw new Error(error.response?.data?.message || 'Error al obtener métricas operacionales');
       }
