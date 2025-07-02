@@ -1,0 +1,76 @@
+{
+  "authentication": {
+    "admin": "✅ Success",
+    "manager": "✅ Success",
+    "employee": "✅ Success"
+  },
+  "endpoints": {
+    "attendance": {
+      "json": true,
+      "csv": true,
+      "jsonStatus": 200,
+      "csvStatus": 200
+    },
+    "overtime": {
+      "json": true,
+      "csv": true,
+      "jsonStatus": 200,
+      "csvStatus": 200
+    },
+    "coverage": {
+      "json": true,
+      "csv": true,
+      "jsonStatus": 200,
+      "csvStatus": 200
+    },
+    "weekly-schedule": {
+      "json": true,
+      "csv": true,
+      "jsonStatus": 200,
+      "csvStatus": 200
+    },
+    "employee-schedule": {
+      "json": true,
+      "csv": true,
+      "jsonStatus": 200,
+      "csvStatus": 200
+    },
+    "cost-analysis": {
+      "json": true,
+      "csv": true,
+      "jsonStatus": 200,
+      "csvStatus": 200
+    },
+    "operational-metrics": {
+      "json": true,
+      "csv": true,
+      "jsonStatus": 200,
+      "csvStatus": 200
+    }
+  },
+  "csv_exports": {},
+  "authorization": {
+    "admin": {
+      "hasAccess": true,
+      "expectedAccess": true,
+      "status": 200,
+      "correct": true
+    },
+    "manager": {
+      "hasAccess": false,
+      "expectedAccess": true,
+      "status": 403,
+      "correct": false
+    },
+    "employee": {
+      "hasAccess": false,
+      "expectedAccess": false,
+      "status": 403,
+      "correct": true
+    }
+  },
+  "no_auth": {
+    "correctlyBlocked": true,
+    "status": 401
+  }
+}

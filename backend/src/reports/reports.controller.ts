@@ -22,7 +22,7 @@ export class ReportsController {
     @Query('endDate') endDate: string,
     @Query('stationId') stationId?: string,
     @Query('format') format: string = 'json',
-    @Res() res?: Response
+    @Res({ passthrough: true }) res?: Response
   ) {
     const data = await this.reportsService.getAttendanceReport(
       startDate,
@@ -36,7 +36,8 @@ export class ReportsController {
       const csv = await this.reportsService.exportToCSV(csvData, 'attendance-report');
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename=attendance-report.csv');
-      return res.send(csv);
+      res.send(csv);
+      return;
     }
 
     return data;
@@ -50,7 +51,7 @@ export class ReportsController {
     @Query('endDate') endDate: string,
     @Query('stationId') stationId?: string,
     @Query('format') format: string = 'json',
-    @Res() res?: Response
+    @Res({ passthrough: true }) res?: Response
   ) {
     const data = await this.reportsService.getOvertimeReport(
       startDate,
@@ -64,7 +65,8 @@ export class ReportsController {
       const csv = await this.reportsService.exportToCSV(csvData, 'overtime-report');
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename=overtime-report.csv');
-      return res.send(csv);
+      res.send(csv);
+      return;
     }
 
     return data;
@@ -75,7 +77,7 @@ export class ReportsController {
   @Roles(UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT)
   async getStationCoverageReport(
     @Query('format') format: string = 'json',
-    @Res() res?: Response
+    @Res({ passthrough: true }) res?: Response
   ) {
     const data = await this.reportsService.getStationCoverageReport();
 
@@ -83,7 +85,8 @@ export class ReportsController {
       const csv = await this.reportsService.exportToCSV(data, 'coverage-report');
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename=coverage-report.csv');
-      return res.send(csv);
+      res.send(csv);
+      return;
     }
 
     return data;
@@ -96,7 +99,7 @@ export class ReportsController {
     @Query('weekStartDate') weekStartDate: string,
     @Query('stationId') stationId?: string,
     @Query('format') format: string = 'json',
-    @Res() res?: Response
+    @Res({ passthrough: true }) res?: Response
   ) {
     const data = await this.reportsService.getWeeklyScheduleReport(
       weekStartDate,
@@ -107,7 +110,8 @@ export class ReportsController {
       const csv = await this.reportsService.exportToCSV(data, 'weekly-schedule');
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename=weekly-schedule.csv');
-      return res.send(csv);
+      res.send(csv);
+      return;
     }
 
     return data;
@@ -121,7 +125,7 @@ export class ReportsController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
     @Query('format') format: string = 'json',
-    @Res() res?: Response
+    @Res({ passthrough: true }) res?: Response
   ) {
     const data = await this.reportsService.getEmployeeScheduleReport(
       +employeeId,
@@ -133,7 +137,8 @@ export class ReportsController {
       const csv = await this.reportsService.exportToCSV(data, 'employee-schedule');
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename=employee-schedule.csv');
-      return res.send(csv);
+      res.send(csv);
+      return;
     }
 
     return data;
@@ -147,7 +152,7 @@ export class ReportsController {
     @Query('endDate') endDate: string,
     @Query('stationId') stationId?: string,
     @Query('format') format: string = 'json',
-    @Res() res?: Response
+    @Res({ passthrough: true }) res?: Response
   ) {
     const data = await this.reportsService.getCostAnalysisReport(
       startDate,
@@ -161,7 +166,8 @@ export class ReportsController {
       const csv = await this.reportsService.exportToCSV(csvData, 'cost-analysis');
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename=cost-analysis.csv');
-      return res.send(csv);
+      res.send(csv);
+      return;
     }
 
     return data;
