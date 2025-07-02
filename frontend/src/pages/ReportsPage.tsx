@@ -40,7 +40,6 @@ const ReportsPage: React.FC = () => {
   });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [stations, setStations] = useState<Station[]>([]);
-  const [employees, setEmployees] = useState<User[]>([]);
   const [error, setError] = useState<string | null>(null);
   
   // Estados de filtros
@@ -224,10 +223,10 @@ const ReportsPage: React.FC = () => {
       }));
     }, 1000);
 
-    // Mostrar advertencia de timeout después de 15 segundos
+    // Mostrar advertencia de timeout después de 30 segundos (50% del timeout total de 60s)
     timeoutRef.current = setTimeout(() => {
       setLoading(prev => ({ ...prev, timeoutWarning: true }));
-    }, 15000);
+    }, 30000);
   }, []);
 
   // Función principal para generar reportes
@@ -314,11 +313,12 @@ const ReportsPage: React.FC = () => {
       } else if (error.response?.status === 401) {
         setError('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.');
       } else if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-        setError('El reporte tardó demasiado en generarse. Intenta con un rango de fechas más pequeño.');
+        setError('El reporte tardó demasiado en generarse. Intenta con un rango de fechas más pequeño o revisa tu conexión.');
       } else {
         setError(error.response?.data?.message || error.message || 'Error al generar el reporte');
       }
     } finally {
+      // Asegurar limpieza completa del estado
       cleanupRefs();
       setLoading({
         isLoading: false,
@@ -373,7 +373,6 @@ const ReportsPage: React.FC = () => {
       }
 
       let exportData;
-      const reportName = reportTypes.find(r => r.id === selectedReport)?.name || 'reporte';
 
       switch (selectedReport) {
         case 'attendance':
@@ -570,15 +569,9 @@ const ReportsPage: React.FC = () => {
           {reportData.suggestion && (
             <p className="text-gray-400 text-sm mt-2">{reportData.suggestion}</p>
           )}
-          <button 
-            onClick={generateReport}
-            className="mt-4 btn-primary flex items-center justify-center mx-auto"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            🔄 Reintentar Reporte
-          </button>
+          <p className="text-gray-400 text-sm mt-4">
+            Usa el botón "🚀 Generar Reporte" en la parte superior para intentar nuevamente
+          </p>
         </div>
       );
     }
@@ -596,15 +589,9 @@ const ReportsPage: React.FC = () => {
           <p className="text-gray-400 text-sm mt-2">
             Esto puede significar que no hay datos para el período seleccionado
           </p>
-          <button 
-            onClick={generateReport}
-            className="mt-4 btn-primary flex items-center justify-center mx-auto"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            🔄 Actualizar Reporte
-          </button>
+          <p className="text-gray-400 text-sm mt-4">
+            Usa el botón "🚀 Generar Reporte" en la parte superior para actualizar con nuevos filtros
+          </p>
         </div>
       );
     }
@@ -996,21 +983,13 @@ const ReportsPage: React.FC = () => {
             </label>
             <Select
               isClearable
-              options={employees.map(emp => ({
-                value: emp.id,
-                label: emp.name
-              }))}
-              value={employees.find(e => e.id === filters.employeeId) ? {
-                value: filters.employeeId!,
-                label: employees.find(e => e.id === filters.employeeId)!.name
-              } : null}
-              onChange={(option) => setFilters(prev => ({
-                ...prev,
-                employeeId: option ? option.value : null
-              }))}
-              placeholder="Todos los empleados"
+              options={[]}
+              value={null}
+              onChange={() => {}}
+              placeholder="Todos los empleados (pendiente implementar)"
               className="react-select-container"
               classNamePrefix="react-select"
+              isDisabled={true}
               styles={{
                 control: (base) => ({
                   ...base,
