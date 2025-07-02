@@ -1,32 +1,179 @@
-import React, { useState, useEffect } from 'react';
-import { reportsService, authService, type User } from '../services/api';
-import StationSelect from '../components/StationSelect';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { reportsService, authService, stationService, type User, type Station } from '../services/api';
+import Select from 'react-select';
+
+// Tipos específicos para los reportes
+interface ReportParams {
+  startDate: string;
+  endDate: string;
+  stationId?: number;
+  employeeId?: number;
+  format?: 'json' | 'csv';
+}
+
+interface ReportFilter {
+  dateRange: {
+    startDate: string;
+    endDate: string;
+  };
+  stationId: number | null;
+  employeeId: number | null;
+  quickDateRange: string;
+}
+
+interface LoadingState {
+  isLoading: boolean;
+  progress: number;
+  timeoutWarning: boolean;
+  currentOperation: string;
+}
 
 const ReportsPage: React.FC = () => {
+  // Estados principales
   const [selectedReport, setSelectedReport] = useState<string>('attendance');
   const [reportData, setReportData] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [loadingProgress, setLoadingProgress] = useState(0);
-  const [timeoutWarning, setTimeoutWarning] = useState(false);
-  const [abortController, setAbortController] = useState<AbortController | null>(null);
-  const [dateRange, setDateRange] = useState({
-    startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0]
+  const [loading, setLoading] = useState<LoadingState>({
+    isLoading: false,
+    progress: 0,
+    timeoutWarning: false,
+    currentOperation: ''
   });
-  const [stationId, setStationId] = useState<number | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [stations, setStations] = useState<Station[]>([]);
+  const [employees, setEmployees] = useState<User[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Estados de filtros
+  const [filters, setFilters] = useState<ReportFilter>({
+    dateRange: {
+      startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      endDate: new Date().toISOString().split('T')[0]
+    },
+    stationId: null,
+    employeeId: null,
+    quickDateRange: 'last_7_days'
+  });
 
+  // Referencias para manejo de timeouts y cancelaciones
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const progressRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Configuración de tipos de reportes
   const reportTypes = [
-    { id: 'attendance', name: 'Reporte de Asistencia', icon: '👥' },
-    { id: 'overtime', name: 'Reporte de Horas Extra', icon: '⏰' },
-    { id: 'coverage', name: 'Cobertura de Estaciones', icon: '📍' },
-    { id: 'weekly-schedule', name: 'Horario Semanal', icon: '📅' },
-    { id: 'employee-schedule', name: 'Horario por Empleado', icon: '👤' },
-    { id: 'cost-analysis', name: 'Análisis de Costos', icon: '💰' },
-    { id: 'operational-metrics', name: 'Métricas Operacionales', icon: '📊' }
+    { 
+      id: 'attendance', 
+      name: 'Reporte de Asistencia', 
+      icon: '👥',
+      description: 'Análisis detallado de la asistencia del personal',
+      permissions: ['view_reports']
+    },
+    { 
+      id: 'overtime', 
+      name: 'Reporte de Horas Extra', 
+      icon: '⏰',
+      description: 'Seguimiento de horas extras y pagos adicionales',
+      permissions: ['view_reports']
+    },
+    { 
+      id: 'coverage', 
+      name: 'Cobertura de Estaciones', 
+      icon: '📍',
+      description: 'Estado de cobertura de personal por estación',
+      permissions: ['view_reports']
+    },
+    { 
+      id: 'weekly-schedule', 
+      name: 'Programación Semanal', 
+      icon: '📅',
+      description: 'Horarios y programación semanal del personal',
+      permissions: ['view_reports']
+    },
+    { 
+      id: 'employee-schedule', 
+      name: 'Horario por Empleado', 
+      icon: '👤',
+      description: 'Horarios específicos de empleados individuales',
+      permissions: ['view_reports']
+    },
+    { 
+      id: 'cost-analysis', 
+      name: 'Análisis de Costos', 
+      icon: '💰',
+      description: 'Análisis financiero y de costos operacionales',
+      permissions: ['view_reports', 'export_reports']
+    },
+    { 
+      id: 'operational-metrics', 
+      name: 'Métricas Operacionales', 
+      icon: '📊',
+      description: 'KPIs y métricas de rendimiento operacional',
+      permissions: ['view_reports']
+    }
   ];
 
-  // Función para determinar si el usuario puede acceder a reportes
+  // Rangos de fechas predefinidos
+  const quickDateRanges = [
+    { 
+      id: 'today', 
+      name: 'Hoy',
+      getRange: () => {
+        const today = new Date().toISOString().split('T')[0];
+        return { startDate: today, endDate: today };
+      }
+    },
+    { 
+      id: 'yesterday', 
+      name: 'Ayer',
+      getRange: () => {
+        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        return { startDate: yesterday, endDate: yesterday };
+      }
+    },
+    { 
+      id: 'last_7_days', 
+      name: 'Últimos 7 días',
+      getRange: () => ({
+        startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        endDate: new Date().toISOString().split('T')[0]
+      })
+    },
+    { 
+      id: 'last_30_days', 
+      name: 'Últimos 30 días',
+      getRange: () => ({
+        startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        endDate: new Date().toISOString().split('T')[0]
+      })
+    },
+    { 
+      id: 'this_month', 
+      name: 'Este mes',
+      getRange: () => {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        return {
+          startDate: startOfMonth.toISOString().split('T')[0],
+          endDate: now.toISOString().split('T')[0]
+        };
+      }
+    },
+    { 
+      id: 'last_month', 
+      name: 'Mes pasado',
+      getRange: () => {
+        const now = new Date();
+        const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+        return {
+          startDate: startOfLastMonth.toISOString().split('T')[0],
+          endDate: endOfLastMonth.toISOString().split('T')[0]
+        };
+      }
+    }
+  ];
+
+  // Funciones de permisos
   const canAccessReports = (): boolean => {
     return currentUser?.role === 'admin' || 
            currentUser?.role === 'manager' || 
@@ -34,325 +181,383 @@ const ReportsPage: React.FC = () => {
            currentUser?.role === 'president';
   };
 
-  // Función para determinar si el usuario puede ver todos los reportes o solo los de su estación
   const canViewAllStations = (): boolean => {
     return currentUser?.role === 'admin' || currentUser?.role === 'president';
   };
 
-  // Función para determinar si el usuario puede editar (president solo visualiza)
+  const canExportReports = (): boolean => {
+    return currentUser?.role === 'admin' || 
+           currentUser?.role === 'manager' || 
+           currentUser?.role === 'supervisor';
+  };
+
   const canEdit = (): boolean => {
     return currentUser?.role === 'admin' || 
            currentUser?.role === 'manager' || 
            currentUser?.role === 'supervisor';
   };
 
-  type ReportParams = {
-    startDate: string;
-    endDate: string;
-    stationId?: number;
-  };
+  // Función para limpiar timeouts y controladores
+  const cleanupRefs = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (progressRef.current) {
+      clearInterval(progressRef.current);
+      progressRef.current = null;
+    }
+  }, []);
 
+  // Función para actualizar el progreso de carga
+  const startProgressIndicator = useCallback(() => {
+    setLoading(prev => ({ ...prev, progress: 0 }));
+    
+    progressRef.current = setInterval(() => {
+      setLoading(prev => ({
+        ...prev,
+        progress: Math.min(prev.progress + Math.random() * 15, 85)
+      }));
+    }, 1000);
+
+    // Mostrar advertencia de timeout después de 15 segundos
+    timeoutRef.current = setTimeout(() => {
+      setLoading(prev => ({ ...prev, timeoutWarning: true }));
+    }, 15000);
+  }, []);
+
+  // Función principal para generar reportes
   const generateReport = async () => {
-    // Verificar permisos
     if (!canAccessReports()) {
-      setReportData({ error: 'No tienes permisos para acceder a los reportes' });
-      setLoading(false);
+      setError('No tienes permisos para acceder a los reportes');
       return;
     }
 
     // Verificar token de autenticación
     const token = localStorage.getItem('auth_token');
     if (!token) {
-      setReportData({ error: 'No hay token de autenticación. Por favor, inicia sesión nuevamente.' });
-      setLoading(false);
+      setError('No hay token de autenticación. Por favor, inicia sesión nuevamente.');
       return;
     }
 
-    console.log('🔑 Auth token check:', { 
-      hasToken: !!token, 
-      tokenLength: token?.length, 
-      tokenPreview: token ? `${token.substring(0, 20)}...` : 'none' 
+    // Limpiar estado anterior
+    cleanupRefs();
+    setError(null);
+    setReportData(null);
+
+    // Configurar nuevo controlador de cancelación
+    abortControllerRef.current = new AbortController();
+
+    // Configurar estado de carga
+    setLoading({
+      isLoading: true,
+      progress: 0,
+      timeoutWarning: false,
+      currentOperation: `Generando ${reportTypes.find(r => r.id === selectedReport)?.name || 'reporte'}...`
     });
 
-    // Cancelar cualquier petición anterior
-    if (abortController) {
-      abortController.abort();
-    }
+    startProgressIndicator();
 
-    // Crear nuevo AbortController
-    const newAbortController = new AbortController();
-    setAbortController(newAbortController);
-
-    setLoading(true);
-    setReportData(null);
-    setTimeoutWarning(false);
-    setLoadingProgress(0);
-    
-    console.log('🔄 Generating report:', selectedReport, 'with params:', dateRange, 'stationId:', stationId);
-
-    // Mostrar advertencia de timeout después de 8 segundos (reducido de 15)
-    const timeoutTimer = setTimeout(() => {
-      setTimeoutWarning(true);
-    }, 8000);
-
-    // Simular progreso de carga más rápido
-    const progressTimer = setInterval(() => {
-      setLoadingProgress(prev => {
-        if (prev >= 85) return prev; // Detener antes del 100%
-        return prev + Math.random() * 15; // Incrementos más grandes
-      });
-    }, 1000); // Actualizar cada segundo
-    
     try {
-      let data;
-      const params: ReportParams = { ...dateRange };
-      
+      const params: ReportParams = {
+        ...filters.dateRange,
+        stationId: filters.stationId || undefined,
+        employeeId: filters.employeeId || undefined
+      };
+
       // Si el usuario no puede ver todas las estaciones, forzar su stationId
       if (!canViewAllStations() && currentUser?.stationId) {
         params.stationId = currentUser.stationId;
-      } else if (stationId) {
-        params.stationId = stationId;
       }
 
-      console.log('📊 Final params for report:', params);
+      let data;
+      setLoading(prev => ({ ...prev, currentOperation: 'Consultando base de datos...' }));
 
       switch (selectedReport) {
         case 'attendance':
-          console.log('📋 [FRONTEND] SOLICITANDO ATTENDANCE REPORT...');
-          console.log('📋 [FRONTEND] Params:', params);
-          console.log('📋 [FRONTEND] Timestamp antes de llamada:', new Date().toISOString());
-          
           data = await reportsService.getAttendanceReport(params);
-          
-          console.log('✅ [FRONTEND] ======================== ATTENDANCE REPORT RECIBIDO ========================');
-          console.log('✅ [FRONTEND] Timestamp después de llamada:', new Date().toISOString());
-          console.log('✅ [FRONTEND] Tipo de data recibida:', typeof data);
-          console.log('✅ [FRONTEND] Data es null/undefined:', data == null);
-          console.log('✅ [FRONTEND] Data keys:', data ? Object.keys(data) : 'no data');
-          console.log('✅ [FRONTEND] Data completa (JSON):', JSON.stringify(data, null, 2));
-          
-          if (data && typeof data === 'object') {
-            console.log('✅ [FRONTEND] Verificando estructura esperada...');
-            console.log('✅ [FRONTEND] Tiene summary:', !!data.summary);
-            console.log('✅ [FRONTEND] Tiene details:', !!data.details);
-            console.log('✅ [FRONTEND] Details es array:', Array.isArray(data.details));
-            console.log('✅ [FRONTEND] Details length:', data.details?.length || 0);
-            
-            if (data.summary) {
-              console.log('✅ [FRONTEND] Summary completo:', data.summary);
-            }
-            
-            if (data.details && Array.isArray(data.details) && data.details.length > 0) {
-              console.log('✅ [FRONTEND] Primeros 2 details:', data.details.slice(0, 2));
-            }
-          }
           break;
         case 'overtime':
-          console.log('⏰ [FRONTEND] SOLICITANDO OVERTIME REPORT...');
-          console.log('⏰ [FRONTEND] Params:', params);
-          console.log('⏰ [FRONTEND] Timestamp antes de llamada:', new Date().toISOString());
-          
           data = await reportsService.getOvertimeReport(params);
-          
-          console.log('✅ [FRONTEND] ======================== OVERTIME REPORT RECIBIDO ========================');
-          console.log('✅ [FRONTEND] Timestamp después de llamada:', new Date().toISOString());
-          console.log('✅ [FRONTEND] Tipo de data recibida:', typeof data);
-          console.log('✅ [FRONTEND] Data completa (JSON):', JSON.stringify(data, null, 2));
           break;
         case 'coverage':
-          console.log('📍 [FRONTEND] SOLICITANDO COVERAGE REPORT...');
-          console.log('📍 [FRONTEND] Timestamp antes de llamada:', new Date().toISOString());
-          
           data = await reportsService.getCoverageReport();
-          
-          console.log('✅ [FRONTEND] ======================== COVERAGE REPORT RECIBIDO ========================');
-          console.log('✅ [FRONTEND] Timestamp después de llamada:', new Date().toISOString());
-          console.log('✅ [FRONTEND] Data completa (JSON):', JSON.stringify(data, null, 2));
           break;
         case 'weekly-schedule':
-          console.log('📅 [FRONTEND] SOLICITANDO WEEKLY SCHEDULE REPORT...');
-          console.log('📅 [FRONTEND] Params:', params);
-          
           data = await reportsService.getWeeklySchedule(params);
-          
-          console.log('✅ [FRONTEND] ======================== WEEKLY SCHEDULE RECIBIDO ========================');
-          console.log('✅ [FRONTEND] Data completa (JSON):', JSON.stringify(data, null, 2));
           break;
         case 'employee-schedule':
-          console.log('👤 [FRONTEND] SOLICITANDO EMPLOYEE SCHEDULE REPORT...');
-          console.log('👤 [FRONTEND] Params:', params);
-          
           data = await reportsService.getEmployeeSchedule(params);
-          
-          console.log('✅ [FRONTEND] ======================== EMPLOYEE SCHEDULE RECIBIDO ========================');
-          console.log('✅ [FRONTEND] Data completa (JSON):', JSON.stringify(data, null, 2));
           break;
         case 'cost-analysis':
-          console.log('💰 [FRONTEND] SOLICITANDO COST ANALYSIS REPORT...');
-          console.log('💰 [FRONTEND] Params:', params);
-          
           data = await reportsService.getCostAnalysis(params);
-          
-          console.log('✅ [FRONTEND] ======================== COST ANALYSIS RECIBIDO ========================');
-          console.log('✅ [FRONTEND] Data completa (JSON):', JSON.stringify(data, null, 2));
           break;
         case 'operational-metrics':
-          console.log('📊 [FRONTEND] SOLICITANDO OPERATIONAL METRICS REPORT...');
-          console.log('📊 [FRONTEND] Params:', params);
-          
           data = await reportsService.getOperationalMetrics(params);
-          
-          console.log('✅ [FRONTEND] ======================== OPERATIONAL METRICS RECIBIDO ========================');
-          console.log('✅ [FRONTEND] Data completa (JSON):', JSON.stringify(data, null, 2));
           break;
         default:
-          console.log('❌ [FRONTEND] Reporte no reconocido:', selectedReport);
-          data = { message: 'Reporte no disponible' };
+          throw new Error('Tipo de reporte no válido');
       }
-      
-      console.log('🎯 [FRONTEND] ======================== ESTABLECIENDO REPORT DATA ========================');
-      console.log('🎯 [FRONTEND] Datos que se van a establecer en el estado:', data);
-      console.log('🎯 [FRONTEND] Momento de setReportData:', new Date().toISOString());
-      
+
+      setLoading(prev => ({ ...prev, progress: 100, currentOperation: 'Finalizando...' }));
       setReportData(data);
-      setLoadingProgress(100);
-      
-      console.log('✅ [FRONTEND] ======================== ESTADO ACTUALIZADO ========================');
-      console.log('✅ [FRONTEND] reportData debería estar actualizado ahora');
-      console.log('✅ [FRONTEND] loadingProgress establecido a 100%');
+
     } catch (error: any) {
-      console.error('❌ Error generating report:', error);
-      console.error('❌ Error details:', error.response?.data || error.message);
-      console.error('❌ Error status:', error.response?.status);
+      console.error('Error generating report:', error);
       
-      // Manejar errores específicos
       if (error.name === 'AbortError') {
-        setReportData({ message: 'Reporte cancelado por el usuario' });
+        setError('Reporte cancelado por el usuario');
       } else if (error.response?.status === 401) {
-        setReportData({ 
-          error: '🔐 Error de autenticación. Tu sesión ha expirado.',
-          suggestion: 'Por favor, inicia sesión nuevamente para acceder a los reportes.',
-          isAuthError: true 
-        });
+        setError('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.');
       } else if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-        setReportData({ 
-          error: 'El reporte tardó demasiado en generarse. Intenta con un rango de fechas más pequeño o verifica tu conexión.',
-          isTimeout: true 
-        });
+        setError('El reporte tardó demasiado en generarse. Intenta con un rango de fechas más pequeño.');
       } else {
-        setReportData({ 
-          error: 'Error al generar el reporte: ' + (error.response?.data?.message || error.message),
-          suggestion: 'Intenta nuevamente o contacta al administrador si el problema persiste.'
-        });
+        setError(error.response?.data?.message || error.message || 'Error al generar el reporte');
       }
     } finally {
-      clearTimeout(timeoutTimer);
-      clearInterval(progressTimer);
-      setLoading(false);
-      setTimeoutWarning(false);
-      setLoadingProgress(0);
-      setAbortController(null);
-      console.log('🏁 Report generation finished');
+      cleanupRefs();
+      setLoading({
+        isLoading: false,
+        progress: 0,
+        timeoutWarning: false,
+        currentOperation: ''
+      });
     }
   };
 
-  const generateMockData = (reportType: string) => {
-    // Solo retorna mensaje de error, sin datos hardcodeados
-    return { message: 'No se pudo obtener datos del backend para ' + reportType };
-  };
+  // Función para cancelar el reporte
+  const cancelReport = useCallback(() => {
+    cleanupRefs();
+    setLoading({
+      isLoading: false,
+      progress: 0,
+      timeoutWarning: false,
+      currentOperation: ''
+    });
+    setError('Reporte cancelado por el usuario');
+  }, [cleanupRefs]);
 
-  useEffect(() => {
-    // Inicializar usuario actual
-    const user = authService.getCurrentUser();
-    console.log('👤 Current user from localStorage:', user);
-    console.log('👤 User role:', user?.role);
-    console.log('👤 Can access reports:', user?.role === 'admin' || user?.role === 'manager' || user?.role === 'supervisor' || user?.role === 'president');
-    setCurrentUser(user);
-  }, []);
-
-  // Removed automatic report generation - now only manual via button click
-
-  const cancelReport = () => {
-    if (abortController) {
-      abortController.abort();
-      setLoading(false);
-      setTimeoutWarning(false);
-      setLoadingProgress(0);
-      setReportData({ message: 'Reporte cancelado por el usuario' });
-    }
-  };
-
-  const renderReportContent = () => {
-    console.log('🖼️ [RENDER] ======================== RENDERIZANDO CONTENIDO ========================');
-    console.log('🖼️ [RENDER] Timestamp:', new Date().toISOString());
-    console.log('🖼️ [RENDER] Loading state:', loading);
-    console.log('🖼️ [RENDER] ReportData state:', reportData);
-    console.log('🖼️ [RENDER] ReportData type:', typeof reportData);
-    console.log('🖼️ [RENDER] ReportData is null/undefined:', reportData == null);
-    
-    if (reportData) {
-      console.log('🖼️ [RENDER] ReportData keys:', Object.keys(reportData));
-      console.log('🖼️ [RENDER] ReportData.summary:', reportData.summary);
-      console.log('🖼️ [RENDER] ReportData.details:', reportData.details);
-      console.log('🖼️ [RENDER] ReportData.details length:', reportData.details?.length);
-      console.log('🖼️ [RENDER] ReportData.error:', reportData.error);
-      console.log('🖼️ [RENDER] ReportData.message:', reportData.message);
-    }
-    
-    if (loading) {
-      console.log('🖼️ [RENDER] Mostrando loading spinner');
-      return (
-        <div className="flex flex-col items-center justify-center h-64 space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-          <div className="text-center">
-            <span className="text-gray-400 block">Generando reporte...</span>
-            {loadingProgress > 0 && (
-              <div className="w-64 bg-gray-700 rounded-full h-2 mt-2">
-                <div 
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${Math.min(loadingProgress, 100)}%` }}
-                ></div>
-              </div>
-            )}
-            {timeoutWarning && (
-              <div className="mt-3 p-3 bg-yellow-900 border border-yellow-600 rounded-lg">
-                <p className="text-yellow-200 text-sm">
-                  ⚠️ El reporte está tardando más de 8 segundos
-                </p>
-                <p className="text-yellow-300 text-xs mt-1">
-                  Esto es inusual para la cantidad de datos. Verifica tu conexión.
-                </p>
-                <button 
-                  onClick={cancelReport}
-                  className="mt-2 px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-yellow-100 text-xs rounded"
-                >
-                  Cancelar Reporte
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      );
+  // Función para exportar reportes
+  const exportReport = async (format: 'csv' | 'json') => {
+    if (!canExportReports()) {
+      setError('No tienes permisos para exportar reportes');
+      return;
     }
 
     if (!reportData) {
-      console.log('⚠️ [RENDER] No report data available, mostrando mensaje inicial');
+      setError('No hay datos para exportar. Genera un reporte primero.');
+      return;
+    }
+
+    try {
+      setLoading({
+        isLoading: true,
+        progress: 0,
+        timeoutWarning: false,
+        currentOperation: `Exportando a ${format.toUpperCase()}...`
+      });
+
+      const params: ReportParams = {
+        ...filters.dateRange,
+        stationId: filters.stationId || undefined,
+        employeeId: filters.employeeId || undefined,
+        format
+      };
+
+      if (!canViewAllStations() && currentUser?.stationId) {
+        params.stationId = currentUser.stationId;
+      }
+
+      let exportData;
+      const reportName = reportTypes.find(r => r.id === selectedReport)?.name || 'reporte';
+
+      switch (selectedReport) {
+        case 'attendance':
+          exportData = await reportsService.getAttendanceReport(params);
+          break;
+        case 'overtime':
+          exportData = await reportsService.getOvertimeReport(params);
+          break;
+        case 'coverage':
+          exportData = await reportsService.getCoverageReport();
+          break;
+        case 'weekly-schedule':
+          exportData = await reportsService.getWeeklySchedule(params);
+          break;
+        case 'employee-schedule':
+          exportData = await reportsService.getEmployeeSchedule(params);
+          break;
+        case 'cost-analysis':
+          exportData = await reportsService.getCostAnalysis(params);
+          break;
+        case 'operational-metrics':
+          exportData = await reportsService.getOperationalMetrics(params);
+          break;
+        default:
+          throw new Error('Tipo de reporte no válido');
+      }
+
+      // Crear y descargar archivo
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `${selectedReport}_${timestamp}.${format}`;
+      
+      let content: string;
+      let mimeType: string;
+
+      if (format === 'csv') {
+        // Convertir datos a CSV
+        const csvData = Array.isArray(exportData) ? exportData : exportData.details || [];
+        if (csvData.length === 0) {
+          throw new Error('No hay datos para exportar');
+        }
+        
+        const headers = Object.keys(csvData[0]);
+        const csvContent = [
+          headers.join(','),
+          ...csvData.map((row: any) => 
+            headers.map(header => 
+              typeof row[header] === 'string' && row[header].includes(',') 
+                ? `"${row[header]}"` 
+                : row[header]
+            ).join(',')
+          )
+        ].join('\n');
+        
+        content = csvContent;
+        mimeType = 'text/csv';
+      } else {
+        content = JSON.stringify(exportData, null, 2);
+        mimeType = 'application/json';
+      }
+
+      // Crear y descargar archivo
+      const blob = new Blob([content], { type: mimeType });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error: any) {
+      console.error('Error exporting report:', error);
+      setError(error.message || 'Error al exportar el reporte');
+    } finally {
+      setLoading({
+        isLoading: false,
+        progress: 0,
+        timeoutWarning: false,
+        currentOperation: ''
+      });
+    }
+  };
+
+  // Función para actualizar filtros rápidos de fecha
+  const handleQuickDateChange = (rangeId: string) => {
+    const range = quickDateRanges.find(r => r.id === rangeId);
+    if (range) {
+      const newRange = range.getRange();
+      setFilters(prev => ({
+        ...prev,
+        dateRange: newRange,
+        quickDateRange: rangeId
+      }));
+    }
+  };
+
+  // Función para resetear filtros
+  const resetFilters = () => {
+    setFilters({
+      dateRange: {
+        startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        endDate: new Date().toISOString().split('T')[0]
+      },
+      stationId: null,
+      employeeId: null,
+      quickDateRange: 'last_7_days'
+    });
+  };
+
+  // Cargar datos iniciales
+  useEffect(() => {
+    const initializeData = async () => {
+      try {
+        const user = authService.getCurrentUser();
+        setCurrentUser(user);
+
+        if (user && canAccessReports()) {
+          // Cargar estaciones si el usuario puede verlas todas
+          if (canViewAllStations()) {
+            const stationsData = await stationService.getStations();
+            setStations(stationsData);
+          }
+
+          // TODO: Cargar lista de empleados si es necesario
+          // const employeesData = await userService.getEmployees();
+          // setEmployees(employeesData);
+        }
+      } catch (error) {
+        console.error('Error initializing data:', error);
+      }
+    };
+
+    initializeData();
+  }, []);
+
+  // Limpiar recursos al desmontar
+  useEffect(() => {
+    return () => {
+      cleanupRefs();
+    };
+  }, [cleanupRefs]);
+
+  // Componente para renderizar reportes específicos
+  const renderReportContent = () => {
+    if (!reportData) {
       return (
         <div className="text-center py-12">
           <div className="mb-4">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 48 48">
+            <svg className="mx-auto h-16 w-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 48 48">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m6 0h6m-6 6v6m-6-6v6m6-6v6" />
             </svg>
           </div>
-          <p className="text-gray-400 text-lg">Selecciona un tipo de reporte y haz clic en "Actualizar Reporte"</p>
-          <p className="text-gray-500 text-sm mt-2">Los reportes se generan en tiempo real con tus datos actuales</p>
+          <h3 className="text-xl font-medium text-gray-300 mb-2">
+            Listo para generar reportes
+          </h3>
+          <p className="text-gray-400 text-lg mb-4">
+            Selecciona un tipo de reporte, ajusta los filtros y haz clic en "Generar Reporte"
+          </p>
+          <div className="max-w-md mx-auto">
+            <div className="bg-blue-900 bg-opacity-50 border border-blue-600 rounded-lg p-4">
+              <div className="flex items-start">
+                <svg className="w-5 h-5 text-blue-400 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <div className="text-left">
+                  <p className="text-blue-200 text-sm font-medium">
+                    Tips para mejores resultados:
+                  </p>
+                  <ul className="text-blue-300 text-xs mt-2 space-y-1">
+                    <li>• Usa rangos de fecha específicos para reportes más rápidos</li>
+                    <li>• Filtra por estación para reducir la cantidad de datos</li>
+                    <li>• Los reportes se generan en tiempo real con datos actuales</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       );
     }
 
     // Verificar si hay error en la respuesta
     if (reportData.error) {
-      console.log('❌ [RENDER] Report data contains error, mostrando error UI:', reportData.error);
       return (
         <div className="text-center py-12">
           <div className="mb-4">
@@ -364,37 +569,6 @@ const ReportsPage: React.FC = () => {
           <p className="text-red-300 mt-2">{reportData.error}</p>
           {reportData.suggestion && (
             <p className="text-gray-400 text-sm mt-2">{reportData.suggestion}</p>
-          )}
-          {reportData.isTimeout && (
-            <div className="mt-4 p-4 bg-orange-900 border border-orange-600 rounded-lg text-left max-w-md mx-auto">
-              <p className="text-orange-200 font-semibold">💡 Sugerencias:</p>
-              <ul className="text-orange-300 text-sm mt-2 space-y-1">
-                <li>• Reduce el rango de fechas</li>
-                <li>• Filtra por una estación específica</li>
-                <li>• Verifica tu conexión a internet</li>
-                <li>• Intenta nuevamente en un momento</li>
-              </ul>
-            </div>
-          )}
-          {reportData.isAuthError && (
-            <div className="mt-4 p-4 bg-red-900 border border-red-600 rounded-lg text-left max-w-md mx-auto">
-              <p className="text-red-200 font-semibold">🔐 Problema de Autenticación:</p>
-              <ul className="text-red-300 text-sm mt-2 space-y-1">
-                <li>• Tu sesión ha expirado</li>
-                <li>• Necesitas iniciar sesión nuevamente</li>
-                <li>• El token de autenticación no es válido</li>
-              </ul>
-              <button 
-                onClick={() => {
-                  localStorage.removeItem('auth_token');
-                  localStorage.removeItem('user');
-                  window.location.href = '/login';
-                }}
-                className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 text-red-100 text-sm rounded"
-              >
-                Ir a Login
-              </button>
-            </div>
           )}
           <button 
             onClick={generateReport}
@@ -408,7 +582,6 @@ const ReportsPage: React.FC = () => {
 
     // Verificar si hay mensaje pero no datos
     if (reportData.message && !reportData.summary && !reportData.details) {
-      console.log('📝 [RENDER] Report data contains only message, mostrando mensaje:', reportData.message);
       return (
         <div className="text-center py-12">
           <div className="mb-4">
@@ -430,22 +603,9 @@ const ReportsPage: React.FC = () => {
       );
     }
 
-    console.log('📊 [RENDER] ======================== RENDERIZANDO REPORTE ESPECÍFICO ========================');
-    console.log('📊 [RENDER] Selected report type:', selectedReport);
-    console.log('📊 [RENDER] Datos a renderizar:', reportData);
-
     // Renderizado específico para cada tipo de reporte
     switch (selectedReport) {
       case 'attendance':
-        console.log('📋 [RENDER] ======================== RENDERIZANDO ATTENDANCE REPORT ========================');
-        console.log('📋 [RENDER] Summary data:', reportData.summary);
-        console.log('📋 [RENDER] Details array:', reportData.details);
-        console.log('📋 [RENDER] Details count:', reportData.details?.length || 0);
-        
-        if (reportData.details && Array.isArray(reportData.details)) {
-          console.log('📋 [RENDER] Primeros 3 detalles a renderizar:', reportData.details.slice(0, 3));
-        }
-        
         return (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -467,7 +627,7 @@ const ReportsPage: React.FC = () => {
               </div>
             </div>
             
-            <div className="card">
+            <div className="card-dark">
               <h3 className="text-lg font-semibold text-white mb-4">Detalle de Asistencia</h3>
               <div className="overflow-x-auto">
                 <table className="min-w-full">
@@ -478,28 +638,24 @@ const ReportsPage: React.FC = () => {
                       <th className="text-left py-3 px-4 text-gray-300">Estado</th>
                       <th className="text-left py-3 px-4 text-gray-300">Entrada</th>
                       <th className="text-left py-3 px-4 text-gray-300">Salida</th>
-                      <th className="text-left py-3 px-4 text-gray-300">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {reportData.details?.map((item: any, index: number) => {
-                      console.log(`📋 [RENDER] Renderizando row ${index}:`, item);
-                      return (
-                        <tr key={index} className="border-b border-gray-700 hover:bg-gray-700">
-                          <td className="py-3 px-4 text-white">{item.name}</td>
-                          <td className="py-3 px-4 text-gray-300">{item.station}</td>
-                          <td className="py-3 px-4">
-                            <span className={`px-2 py-1 rounded-full text-xs ${
-                              item.status === 'Presente' ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'
-                            }`}>
-                              {item.status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-gray-300">{item.checkIn}</td>
-                          <td className="py-3 px-4 text-gray-300">{item.checkOut}</td>
-                        </tr>
-                      );
-                    })}
+                    {reportData.details?.map((item: any, index: number) => (
+                      <tr key={index} className="border-b border-gray-700 hover:bg-gray-700 transition-colors">
+                        <td className="py-3 px-4 text-white">{item.name}</td>
+                        <td className="py-3 px-4 text-gray-300">{item.station}</td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            item.status === 'Presente' ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'
+                          }`}>
+                            {item.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-gray-300">{item.checkIn || '-'}</td>
+                        <td className="py-3 px-4 text-gray-300">{item.checkOut || '-'}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -508,11 +664,6 @@ const ReportsPage: React.FC = () => {
         );
 
       case 'overtime':
-        console.log('⏰ [RENDER] ======================== RENDERIZANDO OVERTIME REPORT ========================');
-        console.log('⏰ [RENDER] Summary data:', reportData.summary);
-        console.log('⏰ [RENDER] Details array:', reportData.details);
-        console.log('⏰ [RENDER] Details count:', reportData.details?.length || 0);
-        
         return (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -530,7 +681,7 @@ const ReportsPage: React.FC = () => {
               </div>
             </div>
             
-            <div className="card">
+            <div className="card-dark">
               <h3 className="text-lg font-semibold text-white mb-4">Detalle de Horas Extra</h3>
               <div className="overflow-x-auto">
                 <table className="min-w-full">
@@ -543,17 +694,14 @@ const ReportsPage: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {reportData.details?.map((item: any, index: number) => {
-                      console.log(`⏰ [RENDER] Renderizando overtime row ${index}:`, item);
-                      return (
-                        <tr key={index} className="border-b border-gray-700 hover:bg-gray-700">
-                          <td className="py-3 px-4 text-white">{item.name}</td>
-                          <td className="py-3 px-4 text-gray-300">{item.regularHours}</td>
-                          <td className="py-3 px-4 text-yellow-400 font-medium">{item.overtimeHours}</td>
-                          <td className="py-3 px-4 text-green-400 font-medium">{item.totalPay}</td>
-                        </tr>
-                      );
-                    })}
+                    {reportData.details?.map((item: any, index: number) => (
+                      <tr key={index} className="border-b border-gray-700 hover:bg-gray-700 transition-colors">
+                        <td className="py-3 px-4 text-white">{item.name}</td>
+                        <td className="py-3 px-4 text-gray-300">{item.regularHours || 0}</td>
+                        <td className="py-3 px-4 text-yellow-400 font-medium">{item.overtimeHours || 0}</td>
+                        <td className="py-3 px-4 text-green-400 font-medium">{item.totalPay || 0}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -562,15 +710,11 @@ const ReportsPage: React.FC = () => {
         );
 
       default:
-        console.log('🔧 [RENDER] ======================== RENDERIZANDO DEFAULT/RAW DATA ========================');
-        console.log('🔧 [RENDER] Report type:', selectedReport);
-        console.log('🔧 [RENDER] Mostrando datos raw:', reportData);
-        
         return (
-          <div className="card">
-            <h4 className="text-lg font-semibold text-white mb-4">Datos del Reporte (JSON)</h4>
-            <div className="bg-gray-900 p-4 rounded-lg">
-              <pre className="text-gray-300 text-sm overflow-auto whitespace-pre-wrap">
+          <div className="card-dark">
+            <h4 className="text-lg font-semibold text-white mb-4">Datos del Reporte</h4>
+            <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
+              <pre className="text-gray-300 text-sm overflow-auto whitespace-pre-wrap max-h-96">
                 {JSON.stringify(reportData, null, 2)}
               </pre>
             </div>
@@ -592,6 +736,11 @@ const ReportsPage: React.FC = () => {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="bg-red-900 border border-red-700 text-red-100 px-6 py-4 rounded-lg max-w-md text-center">
+          <div className="flex items-center justify-center mb-4">
+            <svg className="w-12 h-12 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 48 48">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 4v2m0 4v2m8-8h4m-4 4h4m-4 4h4M8 21l4-4 4 4M8 21l4 4 4-4" />
+            </svg>
+          </div>
           <h3 className="text-lg font-semibold mb-2">Acceso Restringido</h3>
           <p>No tienes permisos para acceder a los reportes.</p>
           <p className="text-sm mt-2 text-red-300">
@@ -604,86 +753,227 @@ const ReportsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white">Reportes</h1>
+          <h1 className="text-3xl font-bold text-white">Centro de Reportes</h1>
+          <p className="text-gray-400 mt-1">
+            Análisis completo y exportación de datos operacionales
+          </p>
           {currentUser?.role === 'president' && (
-            <p className="text-sm text-yellow-400 mt-1">
-              <svg className="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
+            <div className="flex items-center mt-2 p-2 bg-yellow-900 border border-yellow-600 rounded-lg">
+              <svg className="w-4 h-4 text-yellow-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
               </svg>
-              Modo solo lectura - Presidente
-            </p>
+              <span className="text-yellow-200 text-sm font-medium">Modo solo lectura - Presidente</span>
+            </div>
           )}
         </div>
-        <button
-          onClick={generateReport}
-          disabled={loading || !canEdit()}
-          className="btn-primary disabled:opacity-50"
-          title={!canEdit() ? 'Los presidentes no pueden actualizar reportes' : ''}
-        >
-          {loading ? 'Generando...' : 'Actualizar Reporte'}
-        </button>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={generateReport}
+            disabled={loading.isLoading || !canEdit()}
+            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+            title={!canEdit() ? 'Los presidentes no pueden actualizar reportes' : 'Generar reporte con filtros actuales'}
+          >
+            {loading.isLoading ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Generando...
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Generar Reporte
+              </>
+            )}
+          </button>
+          {loading.isLoading && (
+            <button
+              onClick={cancelReport}
+              className="btn-secondary flex items-center justify-center"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Cancelar
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Selector de tipo de reporte */}
       <div className="card">
-        <h3 className="text-lg font-semibold text-white mb-4">Tipo de Reporte</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-semibold text-white">Tipo de Reporte</h3>
+          <span className="text-sm text-gray-400">
+            {reportTypes.length} tipos disponibles
+          </span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {reportTypes.map((report) => (
             <button
               key={report.id}
               onClick={() => setSelectedReport(report.id)}
-              className={`p-4 rounded-lg border text-left transition-all ${
+              className={`group p-4 rounded-lg border text-left transition-all duration-200 transform hover:scale-105 ${
                 selectedReport === report.id
-                  ? 'border-blue-500 bg-blue-500 bg-opacity-20'
-                  : 'border-gray-600 hover:border-gray-500'
+                  ? 'border-blue-500 bg-blue-500 bg-opacity-20 shadow-lg'
+                  : 'border-gray-600 hover:border-gray-500 hover:bg-gray-700'
               }`}
             >
-              <div className="flex items-center space-x-3">
-                <span className="text-2xl">{report.icon}</span>
-                <span className="text-white font-medium">{report.name}</span>
+              <div className="flex items-start space-x-3">
+                <span className="text-3xl group-hover:scale-110 transition-transform duration-200">
+                  {report.icon}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <span className="text-white font-medium block truncate">
+                    {report.name}
+                  </span>
+                  <p className="text-sm text-gray-400 mt-1 line-clamp-2">
+                    {report.description}
+                  </p>
+                </div>
               </div>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Filtros de fecha y estación */}
+      {/* Filtros avanzados */}
       <div className="card">
-        <h3 className="text-lg font-semibold text-white mb-4">Filtros</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-semibold text-white">Filtros Avanzados</h3>
+          <button
+            onClick={resetFilters}
+            className="btn-secondary text-sm flex items-center"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Resetear
+          </button>
+        </div>
+        
+        {/* Rangos rápidos de fecha */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-300 mb-3">
+            Rangos de Fecha Rápidos
+          </label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+            {quickDateRanges.map((range) => (
+              <button
+                key={range.id}
+                onClick={() => handleQuickDateChange(range.id)}
+                className={`px-3 py-2 text-sm rounded-lg border transition-all ${
+                  filters.quickDateRange === range.id
+                    ? 'border-blue-500 bg-blue-500 bg-opacity-20 text-blue-300'
+                    : 'border-gray-600 text-gray-300 hover:border-gray-500 hover:bg-gray-700'
+                }`}
+              >
+                {range.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Filtros detallados */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Fecha de inicio
+              Fecha de Inicio
             </label>
             <input
               type="date"
-              value={dateRange.startDate}
-              onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+              value={filters.dateRange.startDate}
+              onChange={(e) => setFilters(prev => ({
+                ...prev,
+                dateRange: { ...prev.dateRange, startDate: e.target.value },
+                quickDateRange: ''
+              }))}
               className="input-field"
             />
           </div>
+          
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Fecha de fin
+              Fecha de Fin
             </label>
             <input
               type="date"
-              value={dateRange.endDate}
-              onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+              value={filters.dateRange.endDate}
+              onChange={(e) => setFilters(prev => ({
+                ...prev,
+                dateRange: { ...prev.dateRange, endDate: e.target.value },
+                quickDateRange: ''
+              }))}
               className="input-field"
             />
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Estación
             </label>
             {canViewAllStations() ? (
-              <StationSelect value={stationId} onChange={setStationId} />
+              <Select
+                isClearable
+                options={stations.map(station => ({
+                  value: station.id,
+                  label: station.name
+                }))}
+                value={stations.find(s => s.id === filters.stationId) ? {
+                  value: filters.stationId!,
+                  label: stations.find(s => s.id === filters.stationId)!.name
+                } : null}
+                onChange={(option) => setFilters(prev => ({
+                  ...prev,
+                  stationId: option ? option.value : null
+                }))}
+                placeholder="Todas las estaciones"
+                className="react-select-container"
+                classNamePrefix="react-select"
+                styles={{
+                  control: (base) => ({
+                    ...base,
+                    backgroundColor: '#374151',
+                    borderColor: '#4b5563',
+                    color: '#f9fafb',
+                    minHeight: '44px'
+                  }),
+                  menu: (base) => ({
+                    ...base,
+                    backgroundColor: '#374151',
+                    borderColor: '#4b5563'
+                  }),
+                  option: (base, state) => ({
+                    ...base,
+                    backgroundColor: state.isFocused ? '#4b5563' : '#374151',
+                    color: '#f9fafb'
+                  }),
+                  singleValue: (base) => ({
+                    ...base,
+                    color: '#f9fafb'
+                  }),
+                  placeholder: (base) => ({
+                    ...base,
+                    color: '#9ca3af'
+                  })
+                }}
+              />
             ) : (
-              <div className="input-field bg-gray-800 text-gray-400 cursor-not-allowed">
-                {currentUser?.stationId ? `Estación ${currentUser.stationId}` : 'Sin estación asignada'}
+              <div className="input-field bg-gray-800 text-gray-400 cursor-not-allowed flex items-center">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                {currentUser?.stationId ? 
+                  `Estación ${stations.find(s => s.id === currentUser.stationId)?.name || currentUser.stationId}` 
+                  : 'Sin estación asignada'
+                }
               </div>
             )}
             {!canViewAllStations() && (
@@ -692,31 +982,155 @@ const ReportsPage: React.FC = () => {
               </p>
             )}
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Empleado Específico
+            </label>
+            <Select
+              isClearable
+              options={employees.map(emp => ({
+                value: emp.id,
+                label: emp.name
+              }))}
+              value={employees.find(e => e.id === filters.employeeId) ? {
+                value: filters.employeeId!,
+                label: employees.find(e => e.id === filters.employeeId)!.name
+              } : null}
+              onChange={(option) => setFilters(prev => ({
+                ...prev,
+                employeeId: option ? option.value : null
+              }))}
+              placeholder="Todos los empleados"
+              className="react-select-container"
+              classNamePrefix="react-select"
+              styles={{
+                control: (base) => ({
+                  ...base,
+                  backgroundColor: '#374151',
+                  borderColor: '#4b5563',
+                  color: '#f9fafb',
+                  minHeight: '44px'
+                }),
+                menu: (base) => ({
+                  ...base,
+                  backgroundColor: '#374151',
+                  borderColor: '#4b5563'
+                }),
+                option: (base, state) => ({
+                  ...base,
+                  backgroundColor: state.isFocused ? '#4b5563' : '#374151',
+                  color: '#f9fafb'
+                }),
+                singleValue: (base) => ({
+                  ...base,
+                  color: '#f9fafb'
+                }),
+                placeholder: (base) => ({
+                  ...base,
+                  color: '#9ca3af'
+                })
+              }}
+            />
+          </div>
         </div>
       </div>
 
       {/* Contenido del reporte */}
       <div className="card">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-white">
-            {reportTypes.find(r => r.id === selectedReport)?.name}
-          </h3>
-          <div className="flex space-x-2">
-            <button className="btn-secondary text-sm">
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Exportar PDF
-            </button>
-            <button className="btn-secondary text-sm">
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Exportar Excel
-            </button>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-white">
+              {reportTypes.find(r => r.id === selectedReport)?.name}
+            </h3>
+            <p className="text-sm text-gray-400 mt-1">
+              {reportTypes.find(r => r.id === selectedReport)?.description}
+            </p>
           </div>
+          {reportData && canExportReports() && (
+            <div className="flex flex-wrap gap-2">
+              <button 
+                onClick={() => exportReport('csv')}
+                disabled={loading.isLoading}
+                className="btn-secondary text-sm flex items-center disabled:opacity-50"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Exportar CSV
+              </button>
+              <button 
+                onClick={() => exportReport('json')}
+                disabled={loading.isLoading}
+                className="btn-secondary text-sm flex items-center disabled:opacity-50"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Exportar JSON
+              </button>
+            </div>
+          )}
         </div>
-        {renderReportContent()}
+
+        {/* Indicador de progreso durante la carga */}
+        {loading.isLoading && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-gray-400">{loading.currentOperation}</span>
+              <span className="text-sm text-gray-400">{Math.round(loading.progress)}%</span>
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-2">
+              <div 
+                className="bg-blue-500 h-2 rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${Math.min(loading.progress, 100)}%` }}
+              ></div>
+            </div>
+            {loading.timeoutWarning && (
+              <div className="mt-3 p-3 bg-yellow-900 border border-yellow-600 rounded-lg">
+                <div className="flex items-start">
+                  <svg className="w-5 h-5 text-yellow-400 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <div>
+                    <p className="text-yellow-200 text-sm font-medium">
+                      El reporte está tardando más de lo esperado
+                    </p>
+                    <p className="text-yellow-300 text-xs mt-1">
+                      Esto puede deberse a la cantidad de datos. Puedes reducir el rango de fechas o cancelar y intentar nuevamente.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Manejo de errores */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-900 border border-red-600 rounded-lg">
+            <div className="flex items-start">
+              <svg className="w-5 h-5 text-red-400 mr-3 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              <div className="flex-1">
+                <h4 className="text-red-200 font-medium">Error al procesar reporte</h4>
+                <p className="text-red-300 text-sm mt-1">{error}</p>
+                <button
+                  onClick={() => setError(null)}
+                  className="mt-3 text-sm text-red-400 hover:text-red-300 underline"
+                >
+                  Cerrar mensaje
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Contenido del reporte */}
+        {!loading.isLoading && !error && (
+          renderReportContent()
+        )}
       </div>
     </div>
   );
