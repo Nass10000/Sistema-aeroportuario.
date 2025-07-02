@@ -81,6 +81,21 @@ export class ReportsService {
       const users = await usersQuery.getMany();
       console.log('👥 Found users:', users.length);
 
+      // Early return if no users found to avoid unnecessary processing
+      if (users.length === 0) {
+        console.log('📊 No users found, returning empty report');
+        return {
+          summary: {
+            totalEmployees: 0,
+            presentToday: 0,
+            absentToday: 0,
+            attendanceRate: 0,
+          },
+          details: [],
+          message: 'No se encontraron usuarios para los filtros especificados'
+        };
+      }
+
       // Obtener nombres de estaciones
       const stations = await this.stationRepository
         .createQueryBuilder('station')
@@ -739,62 +754,71 @@ export class ReportsService {
   }
 
   async getOperationalMetrics(startDate: string, endDate: string) {
-    const [
-      totalOperations,
-      completedOperations,
-      cancelledOperations,
-      totalFlights,
-      totalPassengers,
-      averageStaffPerOperation
-    ] = await Promise.all([
-      this.operationRepository.count({
-        where: { scheduledTime: Between(new Date(startDate), new Date(endDate)) }
-      }),
-      this.operationRepository.count({
-        where: { 
-          scheduledTime: Between(new Date(startDate), new Date(endDate)),
-          status: OperationStatus.COMPLETED
-        }
-      }),
-      this.operationRepository.count({
-        where: { 
-          scheduledTime: Between(new Date(startDate), new Date(endDate)),
-          status: OperationStatus.CANCELLED
-        }
-      }),
-      this.operationRepository
-        .createQueryBuilder('operation')
-        .select('COUNT(DISTINCT operation.flightNumber)')
-        .where('operation.scheduledTime BETWEEN :startDate AND :endDate', { startDate, endDate })
-        .getRawOne(),
-      this.operationRepository
-        .createQueryBuilder('operation')
-        .select('SUM(operation.passengerCount)')
-        .where('operation.scheduledTime BETWEEN :startDate AND :endDate', { startDate, endDate })
-        .getRawOne(),
-      this.assignmentRepository
+    try {
+      const [
+        totalOperations,
+        completedOperations,
+        cancelledOperations,
+        totalFlights,
+        totalPassengers
+      ] = await Promise.all([
+        this.operationRepository.count({
+          where: { scheduledTime: Between(new Date(startDate), new Date(endDate)) }
+        }),
+        this.operationRepository.count({
+          where: { 
+            scheduledTime: Between(new Date(startDate), new Date(endDate)),
+            status: OperationStatus.COMPLETED
+          }
+        }),
+        this.operationRepository.count({
+          where: { 
+            scheduledTime: Between(new Date(startDate), new Date(endDate)),
+            status: OperationStatus.CANCELLED
+          }
+        }),
+        this.operationRepository
+          .createQueryBuilder('operation')
+          .select('COUNT(DISTINCT operation.flightNumber) as count')
+          .where('operation.scheduledTime BETWEEN :startDate AND :endDate', { startDate, endDate })
+          .getRawOne(),
+        this.operationRepository
+          .createQueryBuilder('operation')
+          .select('SUM(operation.passengerCount) as sum')
+          .where('operation.scheduledTime BETWEEN :startDate AND :endDate', { startDate, endDate })
+          .getRawOne()
+      ]);
+
+      // Calculate average staff per operation with a simpler query
+      const totalAssignments = await this.assignmentRepository
         .createQueryBuilder('assignment')
         .leftJoin('assignment.operation', 'operation')
-        .select('AVG(subquery.assignmentCount)')
-        .from(subQuery => {
-          return subQuery
-            .select('operation.id, COUNT(assignment.id) as assignmentCount')
-            .from('assignments', 'assignment')
-            .leftJoin('assignment.operation', 'operation')
-            .where('assignment.startTime BETWEEN :startDate AND :endDate', { startDate, endDate })
-            .groupBy('operation.id');
-        }, 'subquery')
-        .getRawOne()
-    ]);
+        .where('assignment.startTime BETWEEN :startDate AND :endDate', { startDate, endDate })
+        .getCount();
 
-    return {
-      totalOperations,
-      completedOperations,
-      cancelledOperations,
-      operationCompletionRate: totalOperations > 0 ? (completedOperations / totalOperations) * 100 : 0,
-      totalFlights: parseInt(totalFlights?.count || '0'),
-      totalPassengers: parseInt(totalPassengers?.sum || '0'),
-      averageStaffPerOperation: parseFloat(averageStaffPerOperation?.avg || '0')
-    };
+      const averageStaffPerOperation = totalOperations > 0 ? totalAssignments / totalOperations : 0;
+
+      return {
+        totalOperations,
+        completedOperations,
+        cancelledOperations,
+        operationCompletionRate: totalOperations > 0 ? (completedOperations / totalOperations) * 100 : 0,
+        totalFlights: parseInt(totalFlights?.count || '0'),
+        totalPassengers: parseInt(totalPassengers?.sum || '0'),
+        averageStaffPerOperation: parseFloat(averageStaffPerOperation.toFixed(2))
+      };
+    } catch (error) {
+      console.error('❌ Error generating operational metrics:', error);
+      return {
+        totalOperations: 0,
+        completedOperations: 0,
+        cancelledOperations: 0,
+        operationCompletionRate: 0,
+        totalFlights: 0,
+        totalPassengers: 0,
+        averageStaffPerOperation: 0,
+        error: error.message
+      };
+    }
   }
 }
