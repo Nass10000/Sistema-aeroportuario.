@@ -6,6 +6,14 @@ import { Operation, OperationStatus } from '../operation/operation.entity';
 import { Station } from '../station/station.entity';
 import { User } from '../user/user.entity';
 import { Punch } from '../punch/punch.entity';
+import { 
+  validateReportParameters, 
+  createEmptyReportResponse, 
+  createEmptyOvertimeResponse, 
+  createEmptyCoverageResponse,
+  createErrorReportResponse,
+  StandardReportResponse 
+} from './reports.utils';
 
 export interface AttendanceReport {
   employeeId: number;
@@ -54,9 +62,15 @@ export class ReportsService {
     startDate: string,
     endDate: string,
     stationId?: number
-  ): Promise<any> {
+  ): Promise<StandardReportResponse> {
     try {
       console.log('📊 Generating attendance report with params:', { startDate, endDate, stationId });
+
+      // Validate required parameters
+      const validation = validateReportParameters(startDate, endDate);
+      if (!validation.isValid) {
+        return createEmptyReportResponse(validation.message);
+      }
 
       // Obtener todos los usuarios EXCEPTO presidente - incluir admin, manager, supervisor, employee
       // Los administradores y presidentes pueden ver todos los empleados
@@ -297,11 +311,10 @@ export class ReportsService {
 
     } catch (error) {
       console.error('❌ Error generating attendance report:', error);
-      return {
-        summary: { totalEmployees: 0, presentToday: 0, absentToday: 0, attendanceRate: 0 },
-        details: [],
-        error: error.message
-      };
+      return createErrorReportResponse(
+        `Error interno al generar el reporte de asistencia: ${error.message}`,
+        'attendance'
+      ) as StandardReportResponse;
     }
   }
 
@@ -309,9 +322,15 @@ export class ReportsService {
     startDate: string,
     endDate: string,
     stationId?: number
-  ): Promise<any> {
+  ): Promise<StandardReportResponse> {
     try {
       console.log('📊 Generating overtime report with params:', { startDate, endDate, stationId });
+
+      // Validate required parameters
+      const validation = validateReportParameters(startDate, endDate);
+      if (!validation.isValid) {
+        return createEmptyOvertimeResponse(validation.message);
+      }
 
       // Obtener todos los usuarios activos EXCEPTO presidente
       let usersQuery = this.userRepository
@@ -444,52 +463,58 @@ export class ReportsService {
 
     } catch (error) {
       console.error('❌ Error generating overtime report:', error);
-      return {
-        summary: { 
-          totalOvertimeHours: 0, 
-          totalOvertimePay: 0, 
-          employeesWithOvertime: 0, 
-          averageOvertimeHours: 0,
-          totalEmployeesAnalyzed: 0 
-        },
-        details: [],
-        error: error.message
-      };
+      return createErrorReportResponse(
+        `Error interno al generar el reporte de horas extra: ${error.message}`,
+        'overtime'
+      ) as StandardReportResponse;
     }
   }
 
   async getStationCoverageReport(): Promise<StationCoverageReport[]> {
-    const results = await this.stationRepository
-      .createQueryBuilder('station')
-      .leftJoin('station.operations', 'operation')
-      .leftJoin('operation.assignments', 'assignment')
-      .select([
-        'station.id as stationId',
-        'station.name as stationName',
-        'station.minimumStaff as requiredStaff',
-        'COUNT(DISTINCT assignment.userId) as currentStaff'
-      ])
-      .where('station.isActive = true')
-      .andWhere('assignment.status IN (:...statuses)', { 
-        statuses: [AssignmentStatus.SCHEDULED, AssignmentStatus.CONFIRMED, AssignmentStatus.IN_PROGRESS] 
-      })
-      .groupBy('station.id, station.name, station.minimumStaff')
-      .getRawMany();
+    try {
+      console.log('📊 Generating station coverage report');
+      
+      const results = await this.stationRepository
+        .createQueryBuilder('station')
+        .leftJoin('station.operations', 'operation')
+        .leftJoin('operation.assignments', 'assignment')
+        .select([
+          'station.id as stationId',
+          'station.name as stationName',
+          'station.minimumStaff as requiredStaff',
+          'COUNT(DISTINCT assignment.userId) as currentStaff'
+        ])
+        .where('station.isActive = true')
+        .andWhere('assignment.status IN (:...statuses)', { 
+          statuses: [AssignmentStatus.SCHEDULED, AssignmentStatus.CONFIRMED, AssignmentStatus.IN_PROGRESS] 
+        })
+        .groupBy('station.id, station.name, station.minimumStaff')
+        .getRawMany();
 
-    return results.map(result => {
-      const currentStaff = parseInt(result.currentStaff) || 0;
-      const requiredStaff = parseInt(result.requiredStaff);
-      const coveragePercentage = requiredStaff > 0 ? (currentStaff / requiredStaff) * 100 : 0;
+      // If no stations found, return empty array with message
+      if (!results || results.length === 0) {
+        console.log('⚠️ No stations found for coverage report');
+        return createEmptyCoverageResponse('No se encontraron estaciones activas con asignaciones');
+      }
 
-      return {
-        stationId: parseInt(result.stationId),
-        stationName: result.stationName,
-        requiredStaff,
-        currentStaff,
-        coveragePercentage,
-        isUnderstaffed: currentStaff < requiredStaff
-      };
-    });
+      return results.map(result => {
+        const currentStaff = parseInt(result.currentStaff) || 0;
+        const requiredStaff = parseInt(result.requiredStaff);
+        const coveragePercentage = requiredStaff > 0 ? (currentStaff / requiredStaff) * 100 : 0;
+
+        return {
+          stationId: parseInt(result.stationId),
+          stationName: result.stationName,
+          requiredStaff,
+          currentStaff,
+          coveragePercentage,
+          isUnderstaffed: currentStaff < requiredStaff
+        };
+      });
+    } catch (error) {
+      console.error('❌ Error generating station coverage report:', error);
+      return createEmptyCoverageResponse(`Error interno al generar el reporte de cobertura: ${error.message}`);
+    }
   }
 
   async getWeeklyScheduleReport(weekStartDate: string, stationId?: number) {
