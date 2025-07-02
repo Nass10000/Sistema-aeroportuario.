@@ -8,11 +8,11 @@ const API_BASE_URL = 'http://localhost:3001';
 const API_VERSION = '2025-07-01-ULTRA-FAST-v1';
 console.log(`🚀 API Service loaded - Version: ${API_VERSION}`);
 
-// Configuración de timeouts ultra-optimizados
-const EXTENDED_TIMEOUT = 20000; // 20 segundos para reportes (reducido de 1 min)
-const BASE_TIMEOUT = 10000; // 10 segundos para operaciones normales (reducido de 30s)
+// Configuración de timeouts optimizados para reportes
+const EXTENDED_TIMEOUT = 60000; // 60 segundos para reportes (aumentado para evitar timeouts)
+const BASE_TIMEOUT = 15000; // 15 segundos para operaciones normales (aumentado levemente)
 
-console.log(`⚡ Timeouts ULTRA-OPTIMIZADOS - Base: ${BASE_TIMEOUT}ms (${BASE_TIMEOUT/1000}s), Reports: ${EXTENDED_TIMEOUT}ms (${EXTENDED_TIMEOUT/1000}s) - SIN REINTENTOS`);
+console.log(`⚡ Timeouts OPTIMIZADOS - Base: ${BASE_TIMEOUT}ms (${BASE_TIMEOUT/1000}s), Reports: ${EXTENDED_TIMEOUT}ms (${EXTENDED_TIMEOUT/1000}s)`);
 
 // Tipos del backend - usando union types para compatibilidad
 export type UserRole = 'employee' | 'supervisor' | 'manager' | 'president' | 'admin';
