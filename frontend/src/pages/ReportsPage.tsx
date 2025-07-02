@@ -40,7 +40,7 @@ const ReportsPage: React.FC = () => {
   });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [stations, setStations] = useState<Station[]>([]);
-  const [employees, setEmployees] = useState<User[]>([]);
+  const [employees] = useState<User[]>([]);
   const [error, setError] = useState<string | null>(null);
   
   // Estados de filtros
@@ -376,7 +376,6 @@ const ReportsPage: React.FC = () => {
       }
 
       let exportData;
-      const reportName = reportTypes.find(r => r.id === selectedReport)?.name || 'reporte';
 
       switch (selectedReport) {
         case 'attendance':
