@@ -528,10 +528,10 @@ const ReportsPage: React.FC = () => {
             </svg>
           </div>
           <h3 className="text-xl font-medium text-gray-300 mb-2">
-            Listo para generar reportes
+            ✨ Listo para generar reportes
           </h3>
           <p className="text-gray-400 text-lg mb-4">
-            Selecciona un tipo de reporte, ajusta los filtros y haz clic en "Generar Reporte"
+            Selecciona un tipo de reporte, ajusta los filtros y usa el botón "🚀 Generar Reporte"
           </p>
           <div className="max-w-md mx-auto">
             <div className="bg-blue-900 bg-opacity-50 border border-blue-600 rounded-lg p-4">
@@ -572,9 +572,12 @@ const ReportsPage: React.FC = () => {
           )}
           <button 
             onClick={generateReport}
-            className="mt-4 btn-primary"
+            className="mt-4 btn-primary flex items-center justify-center mx-auto"
           >
-            Reintentar
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            🔄 Reintentar Reporte
           </button>
         </div>
       );
@@ -595,9 +598,12 @@ const ReportsPage: React.FC = () => {
           </p>
           <button 
             onClick={generateReport}
-            className="mt-4 btn-secondary"
+            className="mt-4 btn-primary flex items-center justify-center mx-auto"
           >
-            Actualizar Reporte
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            🔄 Actualizar Reporte
           </button>
         </div>
       );
@@ -770,33 +776,34 @@ const ReportsPage: React.FC = () => {
           )}
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
+          {/* Simplified single action button that combines generation and display */}
           <button
             onClick={generateReport}
             disabled={loading.isLoading || !canEdit()}
-            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-            title={!canEdit() ? 'Los presidentes no pueden actualizar reportes' : 'Generar reporte con filtros actuales'}
+            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center px-6 py-3 text-lg font-semibold"
+            title={!canEdit() ? 'Los presidentes no pueden actualizar reportes' : 'Generar y mostrar reporte con filtros actuales'}
           >
             {loading.isLoading ? (
               <>
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <svg className="animate-spin -ml-1 mr-3 h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Generando...
+                Generando Reporte...
               </>
             ) : (
               <>
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
-                Generar Reporte
+                🚀 Generar Reporte
               </>
             )}
           </button>
           {loading.isLoading && (
             <button
               onClick={cancelReport}
-              className="btn-secondary flex items-center justify-center"
+              className="btn-secondary flex items-center justify-center opacity-75 hover:opacity-100"
             >
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1047,28 +1054,40 @@ const ReportsPage: React.FC = () => {
               {reportTypes.find(r => r.id === selectedReport)?.description}
             </p>
           </div>
-          {reportData && canExportReports() && (
-            <div className="flex flex-wrap gap-2">
-              <button 
-                onClick={() => exportReport('csv')}
-                disabled={loading.isLoading}
-                className="btn-secondary text-sm flex items-center disabled:opacity-50"
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Exportar CSV
-              </button>
-              <button 
-                onClick={() => exportReport('json')}
-                disabled={loading.isLoading}
-                className="btn-secondary text-sm flex items-center disabled:opacity-50"
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Exportar JSON
-              </button>
+          {/* Simplified export options - shown as a subtle dropdown only when data exists */}
+          {reportData && canExportReports() && !loading.isLoading && (
+            <div className="relative">
+              <details className="group">
+                <summary className="btn-secondary text-sm flex items-center cursor-pointer list-none">
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Exportar
+                  <svg className="w-4 h-4 ml-2 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </summary>
+                <div className="absolute right-0 mt-2 w-40 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-10">
+                  <button 
+                    onClick={() => exportReport('csv')}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    CSV
+                  </button>
+                  <button 
+                    onClick={() => exportReport('json')}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white rounded-b-lg flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    JSON
+                  </button>
+                </div>
+              </details>
             </div>
           )}
         </div>
