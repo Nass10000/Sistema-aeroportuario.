@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Reports API Integration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .auth-section {
+            background-color: #e8f5e8;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .endpoint {
+            margin: 10px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .success { border-color: #4CAF50; background-color: #e8f5e8; }
+        .error { border-color: #f44336; background-color: #ffeaea; }
+        .loading { border-color: #ff9800; background-color: #fff3cd; }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        .json-output {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .summary {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Reports API Integration Test</h1>
+        
+        <div class="auth-section">
+            <h3>Authentication</h3>
+            <button onclick="authenticate()">Login as Admin</button>
+            <span id="auth-status">Not authenticated</span>
+        </div>
+
+        <div class="summary" id="summary" style="display: none;">
+            <h3>Test Results Summary</h3>
+            <div id="summary-content"></div>
+        </div>
+
+        <div id="endpoints">
+            <h3>Reports Endpoints</h3>
+            
+            <div class="endpoint" id="attendance-endpoint">
+                <h4>📊 Attendance Report</h4>
+                <button onclick="testEndpoint('attendance')">Test JSON</button>
+                <button onclick="testEndpoint('attendance', 'csv')">Test CSV</button>
+                <div class="json-output" id="attendance-output"></div>
+            </div>
+
+            <div class="endpoint" id="overtime-endpoint">
+                <h4>⏰ Overtime Report</h4>
+                <button onclick="testEndpoint('overtime')">Test JSON</button>
+                <button onclick="testEndpoint('overtime', 'csv')">Test CSV</button>
+                <div class="json-output" id="overtime-output"></div>
+            </div>
+
+            <div class="endpoint" id="coverage-endpoint">
+                <h4>🏢 Coverage Report</h4>
+                <button onclick="testEndpoint('coverage')">Test JSON</button>
+                <button onclick="testEndpoint('coverage', 'csv')">Test CSV</button>
+                <div class="json-output" id="coverage-output"></div>
+            </div>
+
+            <div class="endpoint" id="weekly-schedule-endpoint">
+                <h4>📅 Weekly Schedule Report</h4>
+                <button onclick="testEndpoint('weekly-schedule')">Test JSON</button>
+                <button onclick="testEndpoint('weekly-schedule', 'csv')">Test CSV</button>
+                <div class="json-output" id="weekly-schedule-output"></div>
+            </div>
+
+            <div class="endpoint" id="employee-schedule-endpoint">
+                <h4>👤 Employee Schedule Report</h4>
+                <button onclick="testEndpoint('employee-schedule')">Test JSON</button>
+                <button onclick="testEndpoint('employee-schedule', 'csv')">Test CSV</button>
+                <div class="json-output" id="employee-schedule-output"></div>
+            </div>
+
+            <div class="endpoint" id="cost-analysis-endpoint">
+                <h4>💰 Cost Analysis Report</h4>
+                <button onclick="testEndpoint('cost-analysis')">Test JSON</button>
+                <button onclick="testEndpoint('cost-analysis', 'csv')">Test CSV</button>
+                <div class="json-output" id="cost-analysis-output"></div>
+            </div>
+
+            <div class="endpoint" id="operational-metrics-endpoint">
+                <h4>📈 Operational Metrics</h4>
+                <button onclick="testEndpoint('operational-metrics')">Test JSON</button>
+                <button onclick="testEndpoint('operational-metrics', 'csv')">Test CSV</button>
+                <div class="json-output" id="operational-metrics-output"></div>
+            </div>
+        </div>
+
+        <div style="margin-top: 30px;">
+            <button onclick="testAllEndpoints()" id="test-all-btn">🧪 Test All Endpoints</button>
+            <button onclick="clearResults()">🧹 Clear Results</button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001';
+        let authToken = null;
+        let testResults = {};
+
+        async function authenticate() {
+            document.getElementById('auth-status').textContent = 'Authenticating...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@aereo.com',
+                        password: 'Admin123!'
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.access_token;
+                    document.getElementById('auth-status').textContent = `✅ Authenticated as ${data.user.name} (${data.user.role})`;
+                    document.getElementById('auth-status').style.color = 'green';
+                } else {
+                    throw new Error(`Authentication failed: ${response.status}`);
+                }
+            } catch (error) {
+                document.getElementById('auth-status').textContent = `❌ Authentication failed: ${error.message}`;
+                document.getElementById('auth-status').style.color = 'red';
+            }
+        }
+
+        async function testEndpoint(endpoint, format = 'json') {
+            if (!authToken) {
+                alert('Please authenticate first');
+                return;
+            }
+
+            const endpointDiv = document.getElementById(`${endpoint}-endpoint`);
+            const outputDiv = document.getElementById(`${endpoint}-output`);
+            
+            endpointDiv.className = 'endpoint loading';
+            outputDiv.textContent = 'Testing...';
+
+            try {
+                let url = `${API_BASE}/reports/${endpoint}`;
+                
+                // Add appropriate query parameters for each endpoint
+                const params = new URLSearchParams();
+                
+                if (['attendance', 'overtime', 'cost-analysis'].includes(endpoint)) {
+                    params.append('startDate', '2024-01-01');
+                    params.append('endDate', '2024-12-31');
+                    params.append('stationId', '1');
+                } else if (endpoint === 'weekly-schedule') {
+                    params.append('weekStartDate', '2024-01-01');
+                    params.append('stationId', '1');
+                } else if (endpoint === 'employee-schedule') {
+                    params.append('employeeId', '1');
+                    params.append('startDate', '2024-01-01');
+                    params.append('endDate', '2024-12-31');
+                } else if (endpoint === 'operational-metrics') {
+                    params.append('startDate', '2024-01-01');
+                    params.append('endDate', '2024-12-31');
+                }
+
+                if (format === 'csv') {
+                    params.append('format', 'csv');
+                }
+
+                if (params.toString()) {
+                    url += '?' + params.toString();
+                }
+
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const resultKey = `${endpoint}-${format}`;
+                
+                if (response.ok) {
+                    endpointDiv.className = 'endpoint success';
+                    testResults[resultKey] = { status: 'success', code: response.status };
+                    
+                    if (format === 'csv') {
+                        const csvData = await response.text();
+                        outputDiv.textContent = `✅ CSV Response (${response.status}):\n${csvData.substring(0, 300)}${csvData.length > 300 ? '...' : ''}`;
+                    } else {
+                        const data = await response.json();
+                        outputDiv.textContent = `✅ JSON Response (${response.status}):\n${JSON.stringify(data, null, 2)}`;
+                    }
+                } else {
+                    endpointDiv.className = 'endpoint error';
+                    testResults[resultKey] = { status: 'error', code: response.status };
+                    const errorData = await response.text();
+                    outputDiv.textContent = `❌ Error (${response.status}):\n${errorData}`;
+                }
+            } catch (error) {
+                endpointDiv.className = 'endpoint error';
+                testResults[`${endpoint}-${format}`] = { status: 'error', code: 0 };
+                outputDiv.textContent = `❌ Network Error:\n${error.message}`;
+            }
+
+            updateSummary();
+        }
+
+        async function testAllEndpoints() {
+            if (!authToken) {
+                alert('Please authenticate first');
+                return;
+            }
+
+            const endpoints = ['attendance', 'overtime', 'coverage', 'weekly-schedule', 'employee-schedule', 'cost-analysis', 'operational-metrics'];
+            const testAllBtn = document.getElementById('test-all-btn');
+            
+            testAllBtn.disabled = true;
+            testAllBtn.textContent = 'Testing...';
+
+            for (const endpoint of endpoints) {
+                await testEndpoint(endpoint, 'json');
+                await new Promise(resolve => setTimeout(resolve, 500)); // Small delay between requests
+                await testEndpoint(endpoint, 'csv');
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            testAllBtn.disabled = false;
+            testAllBtn.textContent = '🧪 Test All Endpoints';
+        }
+
+        function updateSummary() {
+            const summaryDiv = document.getElementById('summary');
+            const summaryContent = document.getElementById('summary-content');
+            
+            const totalTests = Object.keys(testResults).length;
+            const successfulTests = Object.values(testResults).filter(r => r.status === 'success').length;
+            const failedTests = totalTests - successfulTests;
+
+            if (totalTests > 0) {
+                summaryDiv.style.display = 'block';
+                summaryContent.innerHTML = `
+                    <strong>Total Tests:</strong> ${totalTests}<br>
+                    <strong>✅ Successful:</strong> ${successfulTests}<br>
+                    <strong>❌ Failed:</strong> ${failedTests}<br>
+                    <strong>Success Rate:</strong> ${totalTests > 0 ? Math.round((successfulTests / totalTests) * 100) : 0}%
+                `;
+            }
+        }
+
+        function clearResults() {
+            testResults = {};
+            document.getElementById('summary').style.display = 'none';
+            
+            const endpoints = ['attendance', 'overtime', 'coverage', 'weekly-schedule', 'employee-schedule', 'cost-analysis', 'operational-metrics'];
+            endpoints.forEach(endpoint => {
+                document.getElementById(`${endpoint}-endpoint`).className = 'endpoint';
+                document.getElementById(`${endpoint}-output`).textContent = '';
+            });
+        }
+
+        // Auto-authenticate on page load for demo purposes
+        window.onload = function() {
+            setTimeout(authenticate, 1000);
+        };
+    </script>
+</body>
+</html>
