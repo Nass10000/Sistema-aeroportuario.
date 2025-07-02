@@ -40,7 +40,7 @@ const ReportsPage: React.FC = () => {
   });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [stations, setStations] = useState<Station[]>([]);
-  const [employees, setEmployees] = useState<User[]>([]);
+  const [employees] = useState<User[]>([]);
   const [error, setError] = useState<string | null>(null);
   
   // Estados de filtros
@@ -314,9 +314,12 @@ const ReportsPage: React.FC = () => {
       } else if (error.response?.status === 401) {
         setError('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.');
       } else if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-        setError('El reporte tardó demasiado en generarse. Intenta con un rango de fechas más pequeño.');
+        setError('El reporte tardó demasiado en generarse. Intenta con un rango de fechas más pequeño o reduce los filtros aplicados.');
+      } else if (error.message && error.message.includes('TIMEOUT')) {
+        // Handle specific timeout messages from backend
+        setError('El reporte excedió el tiempo límite del servidor. Intenta reducir el rango de fechas o aplicar filtros más específicos.');
       } else {
-        setError(error.response?.data?.message || error.message || 'Error al generar el reporte');
+        setError(error.response?.data?.message || error.message || 'Error al generar el reporte. Verifica tu conexión e intenta nuevamente.');
       }
     } finally {
       cleanupRefs();
@@ -373,7 +376,6 @@ const ReportsPage: React.FC = () => {
       }
 
       let exportData;
-      const reportName = reportTypes.find(r => r.id === selectedReport)?.name || 'reporte';
 
       switch (selectedReport) {
         case 'attendance':
@@ -531,7 +533,7 @@ const ReportsPage: React.FC = () => {
             ✨ Listo para generar reportes
           </h3>
           <p className="text-gray-400 text-lg mb-4">
-            Selecciona un tipo de reporte, ajusta los filtros y usa el botón "🚀 Generar Reporte"
+            Selecciona un tipo de reporte, ajusta los filtros y usa el botón "Generar Reporte"
           </p>
           <div className="max-w-md mx-auto">
             <div className="bg-blue-900 bg-opacity-50 border border-blue-600 rounded-lg p-4">
@@ -603,7 +605,7 @@ const ReportsPage: React.FC = () => {
             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            🔄 Actualizar Reporte
+            🔄 Reintentar Reporte
           </button>
         </div>
       );
@@ -773,43 +775,6 @@ const ReportsPage: React.FC = () => {
               </svg>
               <span className="text-yellow-200 text-sm font-medium">Modo solo lectura - Presidente</span>
             </div>
-          )}
-        </div>
-        <div className="flex flex-col sm:flex-row gap-3">
-          {/* Simplified single action button that combines generation and display */}
-          <button
-            onClick={generateReport}
-            disabled={loading.isLoading || !canEdit()}
-            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center px-6 py-3 text-lg font-semibold"
-            title={!canEdit() ? 'Los presidentes no pueden actualizar reportes' : 'Generar y mostrar reporte con filtros actuales'}
-          >
-            {loading.isLoading ? (
-              <>
-                <svg className="animate-spin -ml-1 mr-3 h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Generando Reporte...
-              </>
-            ) : (
-              <>
-                <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-                🚀 Generar Reporte
-              </>
-            )}
-          </button>
-          {loading.isLoading && (
-            <button
-              onClick={cancelReport}
-              className="btn-secondary flex items-center justify-center opacity-75 hover:opacity-100"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              Cancelar
-            </button>
           )}
         </div>
       </div>
@@ -1040,6 +1005,44 @@ const ReportsPage: React.FC = () => {
               }}
             />
           </div>
+        </div>
+        
+        {/* Simple Generate Report Button in Filters Section */}
+        <div className="mt-6 flex flex-col sm:flex-row gap-3 items-center">
+          <button
+            onClick={generateReport}
+            disabled={loading.isLoading || !canEdit()}
+            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center px-6 py-3 font-medium"
+            title={!canEdit() ? 'Los presidentes no pueden actualizar reportes' : 'Generar reporte con filtros actuales'}
+          >
+            {loading.isLoading ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Generando...
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Generar Reporte
+              </>
+            )}
+          </button>
+          {loading.isLoading && (
+            <button
+              onClick={cancelReport}
+              className="btn-secondary flex items-center justify-center text-sm"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Cancelar
+            </button>
+          )}
         </div>
       </div>
 
