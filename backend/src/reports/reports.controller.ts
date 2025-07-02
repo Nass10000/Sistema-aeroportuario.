@@ -1,11 +1,12 @@
-import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Res, UseGuards, HttpStatus } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { Response } from 'express';
 import { ReportsService } from './reports.service';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { UserRole } from '../common/enums/roles.enum';
+import { createEmptyReportResponse, createEmptyOvertimeResponse, createEmptyCoverageResponse } from './reports.utils';
 
 @ApiTags('reports')
 @ApiBearerAuth()
@@ -17,6 +18,7 @@ export class ReportsController {
   @Get('attendance')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT)
+  @ApiResponse({ status: 200, description: 'Reporte de asistencia generado exitosamente' })
   async getAttendanceReport(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
@@ -24,27 +26,43 @@ export class ReportsController {
     @Query('format') format: string = 'json',
     @Res() res?: Response
   ) {
-    const data = await this.reportsService.getAttendanceReport(
-      startDate,
-      endDate,
-      stationId ? +stationId : undefined
-    );
+    try {
+      const data = await this.reportsService.getAttendanceReport(
+        startDate,
+        endDate,
+        stationId ? +stationId : undefined
+      );
 
-    if (format === 'csv' && res) {
-      // Para CSV, usar solo los detalles del reporte (que es un array)
-      const csvData = Array.isArray(data) ? data : data.details || [];
-      const csv = await this.reportsService.exportToCSV(csvData, 'attendance-report');
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename=attendance-report.csv');
-      return res.send(csv);
+      if (format === 'csv' && res) {
+        // Para CSV, usar solo los detalles del reporte (que es un array)
+        const csvData = Array.isArray(data) ? data : data.details || [];
+        const csv = await this.reportsService.exportToCSV(csvData, 'attendance-report');
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=attendance-report.csv');
+        return res.send(csv);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Controller error in getAttendanceReport:', error);
+      // Always return 200 with empty response structure
+      const emptyResponse = createEmptyReportResponse('Error interno del servidor. Por favor, intente nuevamente.');
+      
+      if (format === 'csv' && res) {
+        const csv = await this.reportsService.exportToCSV([], 'attendance-report');
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=attendance-report.csv');
+        return res.send(csv);
+      }
+      
+      return emptyResponse;
     }
-
-    return data;
   }
 
   @Get('overtime')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT)
+  @ApiResponse({ status: 200, description: 'Reporte de horas extra generado exitosamente' })
   async getOvertimeReport(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
@@ -52,41 +70,72 @@ export class ReportsController {
     @Query('format') format: string = 'json',
     @Res() res?: Response
   ) {
-    const data = await this.reportsService.getOvertimeReport(
-      startDate,
-      endDate,
-      stationId ? +stationId : undefined
-    );
+    try {
+      const data = await this.reportsService.getOvertimeReport(
+        startDate,
+        endDate,
+        stationId ? +stationId : undefined
+      );
 
-    if (format === 'csv' && res) {
-      // Para CSV, usar solo los detalles del reporte (que es un array)
-      const csvData = Array.isArray(data) ? data : data.details || [];
-      const csv = await this.reportsService.exportToCSV(csvData, 'overtime-report');
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename=overtime-report.csv');
-      return res.send(csv);
+      if (format === 'csv' && res) {
+        // Para CSV, usar solo los detalles del reporte (que es un array)
+        const csvData = Array.isArray(data) ? data : data.details || [];
+        const csv = await this.reportsService.exportToCSV(csvData, 'overtime-report');
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=overtime-report.csv');
+        return res.send(csv);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Controller error in getOvertimeReport:', error);
+      // Always return 200 with empty response structure
+      const emptyResponse = createEmptyOvertimeResponse('Error interno del servidor. Por favor, intente nuevamente.');
+      
+      if (format === 'csv' && res) {
+        const csv = await this.reportsService.exportToCSV([], 'overtime-report');
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=overtime-report.csv');
+        return res.send(csv);
+      }
+      
+      return emptyResponse;
     }
-
-    return data;
   }
 
   @Get('coverage')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT)
+  @ApiResponse({ status: 200, description: 'Reporte de cobertura de estaciones generado exitosamente' })
   async getStationCoverageReport(
     @Query('format') format: string = 'json',
     @Res() res?: Response
   ) {
-    const data = await this.reportsService.getStationCoverageReport();
+    try {
+      const data = await this.reportsService.getStationCoverageReport();
 
-    if (format === 'csv' && res) {
-      const csv = await this.reportsService.exportToCSV(data, 'coverage-report');
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename=coverage-report.csv');
-      return res.send(csv);
+      if (format === 'csv' && res) {
+        const csv = await this.reportsService.exportToCSV(data, 'coverage-report');
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=coverage-report.csv');
+        return res.send(csv);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Controller error in getStationCoverageReport:', error);
+      // Always return 200 with empty array
+      const emptyResponse = createEmptyCoverageResponse('Error interno del servidor. Por favor, intente nuevamente.');
+      
+      if (format === 'csv' && res) {
+        const csv = await this.reportsService.exportToCSV([], 'coverage-report');
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=coverage-report.csv');
+        return res.send(csv);
+      }
+      
+      return emptyResponse;
     }
-
-    return data;
   }
 
   @Get('weekly-schedule')
