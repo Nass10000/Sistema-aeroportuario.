@@ -42,19 +42,25 @@ export class ReportsController {
         return res.send(csv);
       }
 
+      // Si NO es CSV, NO usar @Res(). Devolver el objeto directamente.
+      if (res) {
+        // Si accidentalmente se pasa res, evitar dejar la petición colgada
+        return res.json(data);
+      }
       return data;
     } catch (error) {
       console.error('Controller error in getAttendanceReport:', error);
       // Always return 200 with empty response structure
       const emptyResponse = createEmptyReportResponse('Error interno del servidor. Por favor, intente nuevamente.');
-      
       if (format === 'csv' && res) {
         const csv = await this.reportsService.exportToCSV([], 'attendance-report');
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename=attendance-report.csv');
         return res.send(csv);
       }
-      
+      if (res) {
+        return res.json(emptyResponse);
+      }
       return emptyResponse;
     }
   }
@@ -86,19 +92,25 @@ export class ReportsController {
         return res.send(csv);
       }
 
+      // Si NO es CSV, NO usar @Res(). Devolver el objeto directamente.
+      if (res) {
+        // Si accidentalmente se pasa res, evitar dejar la petición colgada
+        return res.json(data);
+      }
       return data;
     } catch (error) {
       console.error('Controller error in getOvertimeReport:', error);
       // Always return 200 with empty response structure
       const emptyResponse = createEmptyOvertimeResponse('Error interno del servidor. Por favor, intente nuevamente.');
-      
       if (format === 'csv' && res) {
         const csv = await this.reportsService.exportToCSV([], 'overtime-report');
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename=overtime-report.csv');
         return res.send(csv);
       }
-      
+      if (res) {
+        return res.json(emptyResponse);
+      }
       return emptyResponse;
     }
   }
@@ -121,19 +133,25 @@ export class ReportsController {
         return res.send(csv);
       }
 
+      // Si NO es CSV, NO usar @Res(). Devolver el objeto directamente.
+      if (res) {
+        // Si accidentalmente se pasa res, evitar dejar la petición colgada
+        return res.json(data);
+      }
       return data;
     } catch (error) {
       console.error('Controller error in getStationCoverageReport:', error);
       // Always return 200 with empty array
       const emptyResponse = createEmptyCoverageResponse('Error interno del servidor. Por favor, intente nuevamente.');
-      
       if (format === 'csv' && res) {
         const csv = await this.reportsService.exportToCSV([], 'coverage-report');
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename=coverage-report.csv');
         return res.send(csv);
       }
-      
+      if (res) {
+        return res.json(emptyResponse);
+      }
       return emptyResponse;
     }
   }
@@ -159,6 +177,11 @@ export class ReportsController {
       return res.send(csv);
     }
 
+    // Si NO es CSV, NO usar @Res(). Devolver el objeto directamente.
+    if (res) {
+      // Si accidentalmente se pasa res, evitar dejar la petición colgada
+      return res.json(data);
+    }
     return data;
   }
 
@@ -185,6 +208,11 @@ export class ReportsController {
       return res.send(csv);
     }
 
+    // Si NO es CSV, NO usar @Res(). Devolver el objeto directamente.
+    if (res) {
+      // Si accidentalmente se pasa res, evitar dejar la petición colgada
+      return res.json(data);
+    }
     return data;
   }
 
@@ -213,6 +241,11 @@ export class ReportsController {
       return res.send(csv);
     }
 
+    // Si NO es CSV, NO usar @Res(). Devolver el objeto directamente.
+    if (res) {
+      // Si accidentalmente se pasa res, evitar dejar la petición colgada
+      return res.json(data);
+    }
     return data;
   }
 
