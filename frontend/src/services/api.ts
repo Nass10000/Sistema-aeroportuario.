@@ -265,20 +265,6 @@ class ApiService {
     }
   }
 
-  // Método específico para reportes con timeout extendido - SIN REINTENTOS
-  private async requestWithExtendedTimeout<T>(
-    requestFn: () => Promise<AxiosResponse<T>>
-  ): Promise<T> {
-    try {
-      const response = await requestFn();
-      return response.data;
-    } catch (error: any) {
-      // Sin reintentos - fallar rápido para mejorar velocidad
-      this.handleApiError(error);
-      throw error;
-    }
-  }
-
   // Manejo de errores más específico
   private handleApiError(error: any): void {
     if (error.code === 'ECONNABORTED') {

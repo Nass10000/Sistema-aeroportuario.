@@ -7,7 +7,7 @@ import StationsPage from '../pages/StationsPage';
 import OperationsPage from '../pages/OperationsPage';
 import AssignmentsPage from '../pages/AssignmentsPage';
 import PunchPage from '../pages/PunchPage';
-import NotificationsPage from '../pages/NotificationsPage';
+import { NotificationsPage } from '../pages/NotificationsPage';
 import ReportsPage from '../pages/ReportsPage';
 import SchedulingPage from '../pages/SchedulingPage';
 

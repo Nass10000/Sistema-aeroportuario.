@@ -26,7 +26,7 @@ export interface User {
 
 export const authService = {
   login: async (credentials: LoginRequest): Promise<LoginResponse> => {
-    const response = await api.post('/auth/login', credentials);
+    const response: any = await api.post('/auth/login', credentials);
     return response.data;
   },
 
@@ -35,26 +35,26 @@ export const authService = {
   },
 
   getCurrentUser: async (): Promise<User> => {
-    const response = await api.get('/auth/profile');
+    const response: any = await api.get('/auth/profile');
     return response.data;
   },
 };
 
 export const userService = {
   getUsers: async (): Promise<User[]> => {
-    const response = await api.get('/users');
+    const response: any = await api.get('/users');
     return response.data;
   },
 
   createUser: async (userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<User> => {
-    const response = await api.post('/users', userData);
+    const response: any = await api.post('/users', userData);
     return response.data;
   },
 };
 
 export const dashboardService = {
   getStats: async () => {
-    const response = await api.get('/dashboard/stats');
+    const response: any = await api.get('/dashboard/stats');
     return response.data;
   },
 };

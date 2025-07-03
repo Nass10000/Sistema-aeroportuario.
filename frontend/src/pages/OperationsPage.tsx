@@ -126,7 +126,7 @@ const OperationsPage: React.FC = () => {
   };
 
   const getOperationTypeIcon = (type: string) => {
-    if (type === 'arrival') {
+    if (type === 'ARRIVAL') {
       return (
         <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
@@ -348,11 +348,11 @@ const OperationsPage: React.FC = () => {
                 <tr key={operation.id} className="table-row border-b border-gray-700">
                   <td className="py-3 px-4">
                     <div className="flex items-center space-x-2">
-                      {getOperationTypeIcon(operation.operationType || 'departure')}
+                      {getOperationTypeIcon(operation.type || 'DEPARTURE')}
                       <span className="text-white font-medium">{operation.flightNumber}</span>
                     </div>
                   </td>
-                  <td className="py-3 px-4 text-gray-300">{operation.airline || 'N/A'}</td>
+                  <td className="py-3 px-4 text-gray-300">{operation.flightNumber || 'N/A'}</td>
                   <td className="py-3 px-4 text-gray-300">
                     {operation.origin} → {operation.destination}
                   </td>
@@ -361,9 +361,9 @@ const OperationsPage: React.FC = () => {
                   </td>
                   <td className="py-3 px-4">
                     <span className={`px-2 py-1 text-xs font-medium text-white rounded-full ${
-                      (operation.operationType || 'departure') === 'arrival' ? 'bg-green-600' : 'bg-blue-600'
+                      (operation.type || 'DEPARTURE') === 'ARRIVAL' ? 'bg-green-600' : 'bg-blue-600'
                     }`}>
-                      {(operation.operationType || 'departure') === 'arrival' ? 'Llegada' : 'Salida'}
+                      {(operation.type || 'DEPARTURE') === 'ARRIVAL' ? 'Llegada' : 'Salida'}
                     </span>
                   </td>
                   <td className="py-3 px-4">
@@ -371,7 +371,7 @@ const OperationsPage: React.FC = () => {
                       {getStatusName(operation.status || 'scheduled')}
                     </span>
                   </td>
-                  <td className="py-3 px-4 text-gray-300">{operation.gate || 'N/A'}</td>
+                  <td className="py-3 px-4 text-gray-300">{operation.station?.name || 'N/A'}</td>
                   <td className="py-3 px-4">
                     <div className="flex space-x-2">
                       <button className="text-blue-400 hover:text-blue-300 p-1">

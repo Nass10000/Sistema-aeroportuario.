@@ -180,7 +180,7 @@ const PunchPage: React.FC = () => {
                 </p>
                 {currentStatus.status === 'in' && (
                   <p className="text-sm text-gray-400 mt-2">
-                    Trabajando: {formatDuration(currentStatus.time)}
+                    Trabajando: {formatDuration(typeof currentStatus.time === 'string' ? currentStatus.time : currentStatus.time.toISOString())}
                   </p>
                 )}
               </div>
@@ -259,7 +259,7 @@ const PunchPage: React.FC = () => {
                     </span>
                   </td>
                   <td className="py-3 px-4 text-gray-300">
-                    {punch.location || 'No especificada'}
+                    {punch.comment || 'Sin comentarios'}
                   </td>
                 </tr>
               ))}

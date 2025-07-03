@@ -137,7 +137,7 @@ const UsersPage: React.FC = () => {
       email: user.email,
       role: user.role as 'admin' | 'manager' | 'supervisor' | 'employee',
       stationId: user.stationId?.toString() || '',
-      category: user.category || 'baggage'
+      category: user.categories?.[0] || 'baggage'
     });
     setShowEditForm(true);
   };

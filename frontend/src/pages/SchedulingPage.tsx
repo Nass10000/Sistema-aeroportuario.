@@ -23,21 +23,41 @@ const SchedulingPage: React.FC = () => {
       setOperations(operationsData);
     } catch (error) {
       console.error('Error fetching initial data:', error);
-      // Datos de ejemplo
+      // Mock data that matches the types
       setUsers([
-        { id: 1, name: 'Juan Pérez', email: 'juan@example.com', role: 'employee', stationId: 1 },
-        { id: 2, name: 'María González', email: 'maria@example.com', role: 'employee', stationId: 2 }
+        { 
+          id: 1, 
+          name: 'Juan Pérez', 
+          email: 'juan@example.com', 
+          role: 'employee' as const, 
+          stationId: 1,
+          isActive: true,
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z'
+        },
+        { 
+          id: 2, 
+          name: 'María González', 
+          email: 'maria@example.com', 
+          role: 'employee' as const, 
+          stationId: 2,
+          isActive: true,
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z'
+        }
       ]);
       setOperations([
         {
           id: 1,
+          name: 'Flight AA123',
           flightNumber: 'AA123',
-          airline: 'American Airlines',
           origin: 'MIA',
           destination: 'JFK',
-          operationType: 'departure',
+          type: 'DEPARTURE' as const,
           scheduledTime: '2024-01-15T10:00:00Z',
-          status: 'scheduled'
+          status: 'SCHEDULED' as const,
+          passengerCount: 150,
+          flightType: 'DOMESTIC' as const
         }
       ]);
     }
@@ -127,7 +147,7 @@ const SchedulingPage: React.FC = () => {
               <option value="">Selecciona una operación</option>
               {operations.map((op) => (
                 <option key={op.id} value={op.id}>
-                  {op.flightNumber} - {op.airline || 'N/A'} ({op.scheduledTime ? new Date(op.scheduledTime!).toLocaleString() : 'N/A'})
+                  {op.flightNumber} - {op.name || 'N/A'} ({op.scheduledTime ? new Date(op.scheduledTime!).toLocaleString() : 'N/A'})
                 </option>
               ))}
             </select>
@@ -230,7 +250,7 @@ const SchedulingPage: React.FC = () => {
                 <option value="">Selecciona una operación</option>
                 {operations.map((op) => (
                   <option key={op.id} value={op.id}>
-                    {op.flightNumber} - {op.airline || 'N/A'}
+                    {op.flightNumber} - {op.name || 'N/A'}
                   </option>
                 ))}
               </select>
@@ -333,7 +353,7 @@ const SchedulingPage: React.FC = () => {
               <option value="">Selecciona una operación</option>
               {operations.map((op) => (
                 <option key={op.id} value={op.id}>
-                  {op.flightNumber} - {op.airline || 'N/A'}
+                  {op.flightNumber} - {op.name || 'N/A'}
                 </option>
               ))}
             </select>
