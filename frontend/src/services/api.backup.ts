@@ -527,10 +527,12 @@ export const authService = {
 // Servicio de Reportes - VERSIÓN ACTUALIZADA CON TIMEOUT EXTENDIDO
 export const reportsService = {
   async getAttendanceReport(params: ReportParams): Promise<any> {
-    console.log('📊 Generando reporte de asistencia - SIN TIMEOUT');
-    console.log('📊 Parámetros:', params);
-    
     try {
+      console.log(`🎯 [ATTENDANCE-REPORT] ======================== INICIANDO REPORTE ========================`);
+      console.log(`📊 [ATTENDANCE-REPORT] Versión API: ${API_VERSION}`);
+      console.log(`📊 [ATTENDANCE-REPORT] Parámetros recibidos:`, params);
+      console.log(`📊 [ATTENDANCE-REPORT] Timestamp de inicio:`, new Date().toISOString());
+      
       const queryParams = new URLSearchParams();
       queryParams.append('startDate', params.startDate);
       queryParams.append('endDate', params.endDate);
@@ -539,22 +541,59 @@ export const reportsService = {
       }
 
       const url = `/reports/attendance?${queryParams.toString()}`;
-      console.log('📊 URL:', url);
-
-      // Llamada usando método público
-      const response = await apiService.get(url) as any;
-      console.log('📊 Respuesta recibida:', response);
+      console.log(`📊 [ATTENDANCE-REPORT] URL construida:`, url);
+      console.log(`📊 [ATTENDANCE-REPORT] Query params:`, Object.fromEntries(queryParams.entries()));
+      
+      console.log(`📤 [ATTENDANCE-REPORT] Llamando a apiService.getReport...`);
+      const response = await apiService.getReport<any>(url);
+      
+      console.log(`✅ [ATTENDANCE-REPORT] ======================== RESPUESTA RECIBIDA ========================`);
+      console.log(`✅ [ATTENDANCE-REPORT] Timestamp de respuesta:`, new Date().toISOString());
+      console.log(`✅ [ATTENDANCE-REPORT] Tipo de respuesta:`, typeof response);
+      console.log(`✅ [ATTENDANCE-REPORT] Respuesta es null/undefined:`, response == null);
+      console.log(`✅ [ATTENDANCE-REPORT] Keys de respuesta:`, response ? Object.keys(response) : 'no data');
+      
+      if (response && typeof response === 'object') {
+        console.log(`✅ [ATTENDANCE-REPORT] Verificando estructura...`);
+        console.log(`✅ [ATTENDANCE-REPORT] Tiene summary:`, !!response.summary);
+        console.log(`✅ [ATTENDANCE-REPORT] Tiene details:`, !!response.details);
+        console.log(`✅ [ATTENDANCE-REPORT] Details es array:`, Array.isArray(response.details));
+        console.log(`✅ [ATTENDANCE-REPORT] Details length:`, response.details?.length || 0);
+        
+        if (response.summary) {
+          console.log(`✅ [ATTENDANCE-REPORT] Summary data:`, response.summary);
+        }
+        
+        if (response.details && Array.isArray(response.details) && response.details.length > 0) {
+          console.log(`✅ [ATTENDANCE-REPORT] Primer detalle:`, response.details[0]);
+          console.log(`✅ [ATTENDANCE-REPORT] Total detalles:`, response.details.length);
+        }
+      }
+      
+      console.log(`🎯 [ATTENDANCE-REPORT] ======================== RETORNANDO AL FRONTEND ========================`);
+      console.log(`🎯 [ATTENDANCE-REPORT] Datos finales:`, response);
       
       return response;
     } catch (error: any) {
-      console.error('❌ Error:', error);
+      console.error(`❌ [ATTENDANCE-REPORT] ======================== ERROR ========================`);
+      console.error(`❌ [ATTENDANCE-REPORT] Timestamp del error:`, new Date().toISOString());
+      console.error(`❌ [ATTENDANCE-REPORT] Error completo:`, {
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+        responseData: error.response?.data,
+        params,
+        isTimeout: false,
+        version: API_VERSION
+      });
       
+      // Error más específico según el tipo - SIN TIMEOUT
       if (error.response?.status === 500) {
-        throw new Error('Error interno del servidor. Intente nuevamente.');
+        throw new Error(`🚨 ERROR SERVIDOR: Error interno del servidor al generar el reporte. Versión: ${API_VERSION}`);
       } else if (error.response?.status === 404) {
-        throw new Error('Endpoint no encontrado.');
+        throw new Error(`📍 ENDPOINT NO ENCONTRADO: La ruta ${error.config?.url} no existe en el servidor.`);
       } else {
-        throw new Error(error.response?.data?.message || 'Error al generar reporte');
+        throw new Error(`❌ ERROR: ${error.response?.data?.message || error.message} (Version: ${API_VERSION})`);
       }
     }
   },
