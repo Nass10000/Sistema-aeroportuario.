@@ -49,7 +49,7 @@ const ReportsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="w-full space-y-6">
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-4">Reportes</h1>
@@ -115,7 +115,7 @@ const ReportsPage: React.FC = () => {
 
         {/* Report Results */}
         {reportData && (
-          <div className="bg-gray-800 rounded-lg p-6">
+          <div className="bg-gray-800 rounded-lg p-6 w-full">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold">Reporte de Asistencia</h2>
             </div>
@@ -124,12 +124,12 @@ const ReportsPage: React.FC = () => {
             </p>
             {/* Report Data Table */}
             {getReportRows(reportData).length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full table-auto border-collapse">
+              <div className="overflow-x-auto w-full">
+                <table className="w-full table-auto border-collapse text-base min-w-max">
                   <thead>
                     <tr className="bg-gray-700 text-gray-300">
                       {Object.keys(getReportRows(reportData)[0] || {}).map((col) => (
-                        <th key={col} className="border border-gray-600 px-4 py-3 text-left">{col}</th>
+                        <th key={col} className="border border-gray-600 px-8 py-4 text-left whitespace-nowrap min-w-[150px]">{col}</th>
                       ))}
                     </tr>
                   </thead>
@@ -137,7 +137,7 @@ const ReportsPage: React.FC = () => {
                     {getReportRows(reportData).map((row: any, index: number) => (
                       <tr key={index} className="hover:bg-gray-700/50">
                         {Object.values(row).map((val, i) => (
-                          <td key={i} className="border border-gray-600 px-4 py-3 text-white font-medium">{String(val)}</td>
+                          <td key={i} className="border border-gray-600 px-8 py-4 text-white font-medium whitespace-nowrap min-w-[150px]">{String(val)}</td>
                         ))}
                       </tr>
                     ))}
@@ -152,12 +152,13 @@ const ReportsPage: React.FC = () => {
               </div>
             )}
             {/* Mostrar siempre el JSON crudo de la respuesta para depuración */}
-            <div className="mt-8">
+            {/* Debug oculto en producción */}
+            {/* <div className="mt-8">
               <h3 className="text-lg font-bold text-gray-300 mb-2">Debug: Respuesta cruda del backend</h3>
               <pre className="text-xs text-gray-400 bg-gray-900 p-2 rounded overflow-x-auto text-left max-w-full whitespace-pre-wrap">
                 {JSON.stringify(reportData, null, 2)}
               </pre>
-            </div>
+            </div> */}
           </div>
         )}
       </div>

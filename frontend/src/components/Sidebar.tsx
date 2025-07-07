@@ -106,24 +106,41 @@ const Sidebar: React.FC<SidebarProps> = ({ user, activeSection, onSectionChange 
   );
 
   return (
-    <div className="sidebar w-64 min-h-screen">
-      <div className="p-6">
-        <nav className="space-y-2">
+    <div className="sidebar w-80 min-h-screen bg-gradient-to-b from-blue-900 via-blue-800 to-gray-900 shadow-2xl border-r border-blue-800">
+      <div className="p-6 flex flex-col h-full">
+        <div className="mb-8 flex items-center space-x-3">
+          <span className="text-2xl font-bold text-white tracking-wide">AEO Sistema</span>
+          <span className="bg-blue-700 text-xs text-white px-2 py-1 rounded-full font-semibold">Control Aeroportuario</span>
+        </div>
+        <nav className="space-y-2 flex-1">
           {visibleItems.map((item) => (
             <button
               key={item.id}
               onClick={() => onSectionChange(item.id)}
-              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-all duration-200 ${
-                activeSection === item.id
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-              }`}
+              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-all duration-200 text-base font-medium group shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-blue-900
+                ${activeSection === item.id
+                  ? 'bg-blue-600 text-white shadow-lg scale-105'
+                  : 'text-gray-300 hover:bg-blue-700 hover:text-white hover:scale-105'}
+              `}
             >
-              {item.icon}
-              <span className="font-medium">{item.name}</span>
+              <span className="transition-transform duration-200 group-hover:scale-110">
+                {item.icon}
+              </span>
+              <span>{item.name}</span>
             </button>
           ))}
         </nav>
+        {user && (
+          <div className="mt-10 flex items-center space-x-3 bg-blue-800/60 rounded-lg p-3">
+            <div className="w-10 h-10 rounded-full bg-blue-700 flex items-center justify-center text-white font-bold text-lg">
+              {user.name?.[0] || user.email?.[0] || 'U'}
+            </div>
+            <div>
+              <div className="text-white font-semibold text-sm">{user.name || user.email}</div>
+              <div className="text-blue-200 text-xs capitalize">{user.role}</div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
