@@ -12,31 +12,53 @@ export class PunchService {
   ) {}
 
   async punch(user: User, type: PunchType, comment?: string) {
-    // 👇 [DEBUG] Imprime el usuario recibido por el servicio (debe tener id)
-    console.log('🟢 PunchService: usuario recibido:', user);
+    try {
+      // 👇 [DEBUG] Imprime el usuario recibido por el servicio (debe tener id)
+      console.log('🟢 PunchService: usuario recibido:', user);
+      console.log('🔵 PunchService: tipo recibido:', type);
 
-    // 👇 [DEBUG] Imprime el tipo de marcaje recibido ('in' o 'out')
-    console.log('🔵 PunchService: tipo recibido:', type);
+      // VALIDACIÓN de usuario (lanza error si no llega usuario válido)
+      const userId = user.id || (user as any).userId;
+      if (!userId) {
+        throw new HttpException('Usuario no válido - ID no encontrado', HttpStatus.BAD_REQUEST);
+      }
 
-    // VALIDACIÓN de usuario (lanza error si no llega usuario válido)
-const userId = user.id || (user as any).userId;
-if (!userId) {
-  throw new HttpException('Usuario no válido', HttpStatus.BAD_REQUEST);
-}
+      // VALIDACIÓN del tipo de punch (solo acepta 'in' o 'out')
+      if (type !== 'in' && type !== 'out') {
+        throw new HttpException('Tipo de punch inválido. Use "in" o "out"', HttpStatus.BAD_REQUEST);
+      }
 
+      // Validación adicional para evitar marcajes duplicados
+      const lastPunch = await this.punchRepository.findOne({
+        where: { user: { id: userId } },
+        order: { timestamp: 'DESC' }
+      });
 
+      if (lastPunch && lastPunch.type === type) {
+        const typeText = type === 'in' ? 'entrada' : 'salida';
+        throw new HttpException(
+          `Ya has marcado ${typeText} recientemente. Tu último marcaje fue ${typeText} el ${lastPunch.timestamp.toLocaleString()}`,
+          HttpStatus.BAD_REQUEST
+        );
+      }
 
-    // VALIDACIÓN del tipo de punch (solo acepta 'in' o 'out')
-    if (type !== 'in' && type !== 'out') {
-      throw new HttpException('Tipo de punch inválido', HttpStatus.BAD_REQUEST);
+      // Crea el registro de punch y lo guarda en la base de datos
+      const punch = this.punchRepository.create({ 
+        user: { id: userId }, 
+        type, 
+        comment,
+        timestamp: new Date()
+      });
+      
+      const savedPunch = await this.punchRepository.save(punch);
+      console.log('✅ PunchService: marcaje guardado:', savedPunch);
+      
+      return savedPunch;
+    } catch (error) {
+      console.error('❌ PunchService: error en punch:', error);
+      throw error;
     }
-
-    // [Opcional] Aquí podrías agregar validación de asignación activa
-
-    // Crea el registro de punch y lo guarda en la base de datos
-   const punch = this.punchRepository.create({ user: { id: userId }, type, comment });
-  return this.punchRepository.save(punch);
-}
+  }
 
   async findByUser(userId: number) {
     return this.punchRepository.find({

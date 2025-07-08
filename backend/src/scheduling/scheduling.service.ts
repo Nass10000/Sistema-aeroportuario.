@@ -41,77 +41,97 @@ export class SchedulingService {
     const errors: string[] = [];
     const warnings: string[] = [];
 
-    // Validar que el usuario existe y está activo
-    const user = await this.userRepository.findOne({
-      where: { id: userId, isActive: true }
-    });
+    try {
+      // Validar que el usuario existe y está activo
+      const user = await this.userRepository.findOne({
+        where: { id: userId, isActive: true }
+      });
 
-    if (!user) {
-      errors.push('Usuario no encontrado o inactivo');
-      return { isValid: false, errors, warnings };
-    }
-
-    // Validar que la operación existe
-    const operation = await this.operationRepository.findOne({
-      where: { id: operationId },
-      relations: ['station']
-    });
-
-    if (!operation) {
-      errors.push('Operación no encontrada');
-      return { isValid: false, errors, warnings };
-    }
-
-    // Validar horarios
-    if (startTime >= endTime) {
-      errors.push('La hora de inicio debe ser anterior a la hora de fin');
-    }
-
-    // Validar duración máxima diaria
-    const duration = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
-    if (duration > user.maxDailyHours) {
-      errors.push(`La duración excede las horas máximas diarias (${user.maxDailyHours}h)`);
-    }
-
-    // Verificar superposición de turnos
-    const overlappingAssignments = await this.checkOverlappingAssignments(
-      userId,
-      startTime,
-      endTime
-    );
-
-    if (overlappingAssignments.length > 0) {
-      errors.push('El empleado ya tiene asignaciones en ese horario');
-    }
-
-    // Verificar horas semanales
-    const weeklyHours = await this.calculateWeeklyHours(userId, startTime);
-    if (weeklyHours + duration > user.maxWeeklyHours) {
-      warnings.push(`La asignación superará las horas semanales máximas (${user.maxWeeklyHours}h)`);
-    }
-
-    // Verificar disponibilidad de turno
-    const shiftType = this.getShiftType(startTime);
-    if (!user.availableShifts?.includes(shiftType)) {
-      warnings.push(`El empleado no está disponible para turnos ${shiftType}`);
-    }
-
-    // Verificar certificaciones requeridas
-    if (operation.station.requiredCertifications.length > 0) {
-      const missingCertifications = operation.station.requiredCertifications.filter(
-        cert => !(user.certifications || []).includes(cert)
-      );
-      
-      if (missingCertifications.length > 0) {
-        errors.push(`El empleado no tiene las certificaciones requeridas: ${missingCertifications.join(', ')}`);
+      if (!user) {
+        errors.push('Usuario no encontrado o inactivo');
+        return { isValid: false, errors, warnings };
       }
-    }
 
-    return {
-      isValid: errors.length === 0,
-      errors,
-      warnings
-    };
+      // Validar que la operación existe
+      const operation = await this.operationRepository.findOne({
+        where: { id: operationId },
+        relations: ['station']
+      });
+
+      if (!operation) {
+        errors.push('Operación no encontrada');
+        return { isValid: false, errors, warnings };
+      }
+
+      // Validar horarios
+      if (startTime >= endTime) {
+        errors.push('La hora de inicio debe ser anterior a la hora de fin');
+      }
+
+      // Validar duración máxima diaria (usar valores por defecto si no existen)
+      const duration = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+      const maxDailyHours = user.maxDailyHours || 8;
+      if (duration > maxDailyHours) {
+        errors.push(`La duración excede las horas máximas diarias (${maxDailyHours}h)`);
+      }
+
+      // Verificar superposición de turnos
+      const overlappingAssignments = await this.checkOverlappingAssignments(
+        userId,
+        startTime,
+        endTime
+      );
+
+      if (overlappingAssignments.length > 0) {
+        errors.push('El empleado ya tiene asignaciones en ese horario');
+      }
+
+      // Verificar horas semanales
+      const weeklyHours = await this.calculateWeeklyHours(userId, startTime);
+      const maxWeeklyHours = user.maxWeeklyHours || 40;
+      if (weeklyHours + duration > maxWeeklyHours) {
+        warnings.push(`La asignación superará las horas semanales máximas (${maxWeeklyHours}h)`);
+      }
+
+      // Verificar disponibilidad de turno si existe
+      try {
+        const shiftType = this.getShiftType(startTime);
+        if (user.availableShifts && !user.availableShifts.includes(shiftType)) {
+          warnings.push(`El empleado no está disponible para turnos ${shiftType}`);
+        }
+      } catch (error) {
+        console.warn('⚠️ Error checking shift availability:', error.message);
+      }
+
+      // Verificar certificaciones requeridas si existen
+      try {
+        if (operation.station?.requiredCertifications?.length > 0) {
+          const userCertifications = user.certifications || [];
+          const missingCertifications = operation.station.requiredCertifications.filter(
+            cert => !userCertifications.includes(cert)
+          );
+          
+          if (missingCertifications.length > 0) {
+            errors.push(`El empleado no tiene las certificaciones requeridas: ${missingCertifications.join(', ')}`);
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ Error checking certifications:', error.message);
+      }
+
+      return {
+        isValid: errors.length === 0,
+        errors,
+        warnings
+      };
+    } catch (error) {
+      console.error('❌ Error in validateAssignment:', error);
+      return {
+        isValid: false,
+        errors: ['Error interno del servidor al validar la asignación'],
+        warnings: []
+      };
+    }
   }
 
   async checkStaffAvailability(
@@ -178,67 +198,85 @@ export class SchedulingService {
     requiredSkills: string[] = [],
     excludeUserIds: number[] = []
   ): Promise<User[]> {
-    const operation = await this.operationRepository.findOne({
-      where: { id: operationId },
-      relations: ['station']
-    });
-
-    if (!operation) {
-      throw new BadRequestException('Operación no encontrada');
-    }
-
-    const query = this.userRepository
-      .createQueryBuilder('user')
-      .where('user.isActive = true')
-      .andWhere('user.isAvailable = true')
-      .andWhere('user.role = :role', { role: 'employee' });
-
-    if (excludeUserIds.length > 0) {
-      query.andWhere('user.id NOT IN (:...excludeIds)', { excludeIds: excludeUserIds });
-    }
-
-    // Filtrar por habilidades requeridas
-    if (requiredSkills.length > 0) {
-      query.andWhere('user.skills && :skills', { skills: requiredSkills });
-    }
-
-    // Filtrar por certificaciones requeridas de la estación
-    if (operation.station.requiredCertifications.length > 0) {
-      query.andWhere('user.certifications && :certifications', {
-        certifications: operation.station.requiredCertifications
+    try {
+      const operation = await this.operationRepository.findOne({
+        where: { id: operationId },
+        relations: ['station']
       });
-    }
 
-    const users = await query.getMany();
+      if (!operation) {
+        throw new BadRequestException('Operación no encontrada');
+      }
 
-    // Filtrar por disponibilidad de horario
-    const shiftType = this.getShiftType(operation.scheduledTime);
-    const availableUsers = users.filter(user => 
-      user.availableShifts?.includes(shiftType) || false
-    );
+      const query = this.userRepository
+        .createQueryBuilder('user')
+        .where('user.isActive = true')
+        .andWhere('user.isAvailable = true')
+        .andWhere('user.role = :role', { role: 'employee' });
 
-    // Verificar conflictos de horario si hay duración estimada
-    if (operation.estimatedDuration) {
-      const endTime = new Date(operation.scheduledTime);
-      endTime.setHours(endTime.getHours() + operation.estimatedDuration);
+      if (excludeUserIds.length > 0) {
+        query.andWhere('user.id NOT IN (:...excludeIds)', { excludeIds: excludeUserIds });
+      }
 
-      const finalUsers: User[] = [];
-      for (const user of availableUsers) {
-        const conflicts = await this.checkOverlappingAssignments(
-          user.id,
-          operation.scheduledTime,
-          endTime
-        );
-        
-        if (conflicts.length === 0) {
-          finalUsers.push(user);
+      // Filtrar por habilidades requeridas si existen
+      if (requiredSkills.length > 0) {
+        // Verificar si la columna skills existe
+        try {
+          query.andWhere('user.skills && :skills', { skills: requiredSkills });
+        } catch (error) {
+          console.warn('⚠️ Skills column not found, skipping skills filter');
         }
       }
 
-      return finalUsers;
-    }
+      // Filtrar por certificaciones requeridas de la estación si existen
+      if (operation.station?.requiredCertifications?.length > 0) {
+        try {
+          query.andWhere('user.certifications && :certifications', {
+            certifications: operation.station.requiredCertifications
+          });
+        } catch (error) {
+          console.warn('⚠️ Certifications column not found, skipping certifications filter');
+        }
+      }
 
-    return availableUsers;
+      const users = await query.getMany();
+
+      // Filtrar por disponibilidad de horario si existe
+      if (operation.scheduledTime) {
+        const shiftType = this.getShiftType(operation.scheduledTime);
+        const availableUsers = users.filter(user => 
+          user.availableShifts?.includes(shiftType) ?? true // Si no tiene availableShifts, asumimos disponible
+        );
+
+        // Verificar conflictos de horario si hay duración estimada
+        if (operation.estimatedDuration) {
+          const endTime = new Date(operation.scheduledTime);
+          endTime.setHours(endTime.getHours() + operation.estimatedDuration);
+
+          const finalUsers: User[] = [];
+          for (const user of availableUsers) {
+            const conflicts = await this.checkOverlappingAssignments(
+              user.id,
+              operation.scheduledTime,
+              endTime
+            );
+            
+            if (conflicts.length === 0) {
+              finalUsers.push(user);
+            }
+          }
+
+          return finalUsers;
+        }
+
+        return availableUsers;
+      }
+
+      return users;
+    } catch (error) {
+      console.error('❌ Error in findAvailableStaff:', error);
+      throw new BadRequestException('Error al buscar personal disponible: ' + error.message);
+    }
   }
 
   async createReplacement(
@@ -300,32 +338,70 @@ export class SchedulingService {
     availableStaff: User[];
     skillsNeeded: string[];
   }> {
-    const operation = await this.operationRepository.findOne({
-      where: { id: operationId },
-      relations: ['station']
-    });
+    try {
+      console.log('🔵 SchedulingService: calculando configuración óptima para operación', operationId);
+      
+      const operation = await this.operationRepository.findOne({
+        where: { id: operationId },
+        relations: ['station']
+      });
 
-    if (!operation) {
-      throw new BadRequestException('Operación no encontrada');
+      if (!operation) {
+        throw new BadRequestException('Operación no encontrada');
+      }
+
+      console.log('🔵 SchedulingService: operación encontrada:', {
+        id: operation.id,
+        name: operation.name,
+        flightNumber: operation.flightNumber,
+        passengerCount: operation.passengerCount,
+        station: operation.station?.name || 'Sin estación'
+      });
+
+      // Calcular personal recomendado basado en número de pasajeros
+      const passengerCount = operation.passengerCount || 100; // valor por defecto
+      const baseStaff = Math.ceil(passengerCount / 50); // 1 persona por cada 50 pasajeros
+      
+      // Obtener el mínimo de la estación si existe
+      let stationMinimum = 2; // valor por defecto
+      if (operation.station?.minimumStaff) {
+        stationMinimum = operation.station.minimumStaff;
+      }
+      
+      const minimumStaff = Math.max(stationMinimum, baseStaff);
+      const recommendedStaff = Math.ceil(minimumStaff * 1.2); // 20% extra para contingencias
+
+      console.log('🔵 SchedulingService: cálculo de personal:', {
+        passengerCount,
+        baseStaff,
+        stationMinimum,
+        minimumStaff,
+        recommendedStaff
+      });
+
+      // Determinar habilidades necesarias según el tipo de operación
+      const skillsNeeded = this.getRequiredSkillsForOperation(operation);
+
+      console.log('🔵 SchedulingService: habilidades necesarias:', skillsNeeded);
+
+      // Buscar personal disponible
+      const availableStaff = await this.findAvailableStaff(operationId, skillsNeeded);
+
+      console.log('🔵 SchedulingService: personal disponible encontrado:', availableStaff.length);
+
+      const result = {
+        minimumStaff,
+        recommendedStaff,
+        availableStaff,
+        skillsNeeded
+      };
+
+      console.log('✅ SchedulingService: configuración óptima calculada:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ SchedulingService: error en getOptimalStaffing:', error);
+      throw new BadRequestException('Error al calcular configuración óptima: ' + error.message);
     }
-
-    // Calcular personal recomendado basado en número de pasajeros
-    const baseStaff = Math.ceil(operation.passengerCount / 50); // 1 persona por cada 50 pasajeros
-    const minimumStaff = Math.max(operation.station.minimumStaff, baseStaff);
-    const recommendedStaff = Math.ceil(minimumStaff * 1.2); // 20% extra para contingencias
-
-    // Determinar habilidades necesarias según el tipo de operación
-    const skillsNeeded = this.getRequiredSkillsForOperation(operation);
-
-    // Buscar personal disponible
-    const availableStaff = await this.findAvailableStaff(operationId, skillsNeeded);
-
-    return {
-      minimumStaff,
-      recommendedStaff,
-      availableStaff,
-      skillsNeeded
-    };
   }
 
   // Métodos privados auxiliares
@@ -382,23 +458,46 @@ export class SchedulingService {
   private getRequiredSkillsForOperation(operation: Operation): string[] {
     const skills: string[] = [];
     
-    // Basado en el tipo de vuelo
-    if (operation.flightType === 'INTERNATIONAL') {
-      skills.push('customs_handling', 'international_procedures');
+    try {
+      // Basado en el tipo de vuelo
+      if (operation.flightType === 'INTERNATIONAL') {
+        skills.push('customs_handling', 'international_procedures');
+      } else if (operation.flightType === 'DOMESTIC') {
+        skills.push('domestic_procedures');
+      }
+      
+      // Basado en el número de pasajeros
+      const passengerCount = operation.passengerCount || 0;
+      if (passengerCount > 200) {
+        skills.push('large_aircraft_handling', 'crowd_management');
+      } else if (passengerCount > 100) {
+        skills.push('medium_aircraft_handling');
+      } else {
+        skills.push('small_aircraft_handling');
+      }
+      
+      // Basado en el tipo de operación
+      if (operation.type === 'DEPARTURE') {
+        skills.push('departure_procedures', 'baggage_loading');
+      } else if (operation.type === 'ARRIVAL') {
+        skills.push('arrival_procedures', 'baggage_unloading');
+      }
+      
+      // Habilidades generales siempre requeridas
+      skills.push('ground_handling', 'safety_procedures');
+      
+      console.log('🔵 SchedulingService: habilidades calculadas para operación:', {
+        operationId: operation.id,
+        type: operation.type,
+        flightType: operation.flightType,
+        passengerCount,
+        skills
+      });
+      
+      return skills;
+    } catch (error) {
+      console.warn('⚠️ Error calculating required skills, using default:', error.message);
+      return ['ground_handling', 'safety_procedures'];
     }
-    
-    // Basado en el número de pasajeros
-    if (operation.passengerCount > 200) {
-      skills.push('large_aircraft_handling', 'crowd_management');
-    }
-    
-    // Basado en el tipo de operación
-    if (operation.type === 'DEPARTURE') {
-      skills.push('departure_procedures', 'baggage_loading');
-    } else {
-      skills.push('arrival_procedures', 'baggage_unloading');
-    }
-    
-    return skills;
   }
 }

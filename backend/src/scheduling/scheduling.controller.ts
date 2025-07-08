@@ -15,19 +15,25 @@ export class SchedulingController {
 
   @Post('validate-assignment')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT)
+  @Roles(UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.ADMIN)
   async validateAssignment(@Body() body: {
     userId: number;
     operationId: number;
     startTime: string;
     endTime: string;
   }) {
-    return this.schedulingService.validateAssignment(
-      body.userId,
-      body.operationId,
-      new Date(body.startTime),
-      new Date(body.endTime)
-    );
+    try {
+      console.log('🔵 SchedulingController: validando asignación:', body);
+      return await this.schedulingService.validateAssignment(
+        body.userId,
+        body.operationId,
+        new Date(body.startTime),
+        new Date(body.endTime)
+      );
+    } catch (error) {
+      console.error('❌ SchedulingController: error en validateAssignment:', error);
+      throw error;
+    }
   }
 
   @Post('check-availability')
@@ -45,22 +51,45 @@ export class SchedulingController {
     );
   }
 
+  @Get('debug/user-info')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.EMPLOYEE, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.ADMIN, UserRole.PRESIDENT)
+  async debugUserInfo(@Request() req) {
+    return {
+      user: req.user,
+      timestamp: new Date(),
+      hasPermission: {
+        scheduling: [UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.ADMIN].includes(req.user.role),
+        availableStaff: [UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.ADMIN].includes(req.user.role)
+      }
+    };
+  }
+
   @Get('available-staff/:operationId')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT)
+  @Roles(UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.ADMIN)
   async findAvailableStaff(
     @Param('operationId') operationId: string,
+    @Request() req,
     @Query('skills') skills?: string,
     @Query('excludeIds') excludeIds?: string
   ) {
-    const requiredSkills = skills ? skills.split(',') : [];
-    const excludeUserIds = excludeIds ? excludeIds.split(',').map(id => +id) : [];
-    
-    return this.schedulingService.findAvailableStaff(
-      +operationId,
-      requiredSkills,
-      excludeUserIds
-    );
+    try {
+      console.log('🔵 SchedulingController: usuario actual:', req.user);
+      console.log('🔵 SchedulingController: buscando personal disponible para operación', operationId);
+      
+      const requiredSkills = skills ? skills.split(',') : [];
+      const excludeUserIds = excludeIds ? excludeIds.split(',').map(id => +id) : [];
+      
+      return await this.schedulingService.findAvailableStaff(
+        +operationId,
+        requiredSkills,
+        excludeUserIds
+      );
+    } catch (error) {
+      console.error('❌ SchedulingController: error en findAvailableStaff:', error);
+      throw error;
+    }
   }
 
   @Post('create-replacement')

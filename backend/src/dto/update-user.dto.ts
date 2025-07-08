@@ -150,6 +150,16 @@ export class UpdateUserDto {
   categories?: EmployeeCategory[];
 
   @ApiProperty({
+    description: 'Categoría única (será convertida a categories array)',
+    enum: EmployeeCategory,
+    example: EmployeeCategory.BAGGAGE,
+    required: false
+  })
+  @IsOptional()
+  @IsEnum(EmployeeCategory, { message: 'Categoría de empleado inválida' })
+  category?: EmployeeCategory;
+
+  @ApiProperty({
     description: 'Turnos disponibles para el empleado',
     enum: ShiftType,
     isArray: true,

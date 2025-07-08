@@ -16,7 +16,7 @@ export class OperationController {
   constructor(private readonly operationService: OperationService) {}
 
   @Post()
-  @Roles(UserRole.MANAGER, UserRole.ADMIN) // Solo MANAGER puede crear operaciones en su estación
+  @Roles(UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.ADMIN) // Managers, supervisores y admins pueden crear operaciones
   @ApiOperation({ summary: 'Crear nueva operación' })
   @ApiBody({ type: CreateOperationDto, description: 'Datos de la operación a crear' })
   @ApiResponse({ status: 201, description: 'Operación creada exitosamente', type: Operation })

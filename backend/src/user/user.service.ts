@@ -176,77 +176,83 @@ export class UserService {
   }
 
   async update(id: number, updateUserDto: UpdateUserDto, currentUser?: any): Promise<User> {
+    console.log('🔵 UserService: actualizando usuario', id, 'con datos:', updateUserDto);
+    console.log('🔵 UserService: usuario actual:', {
+      id: currentUser?.id || currentUser?.userId,
+      role: currentUser?.role,
+      email: currentUser?.email,
+      stationId: currentUser?.stationId
+    });
+
     // Verificar si el usuario existe
     const existingUser = await this.userRepository.findOneBy({ id });
     if (!existingUser) {
       throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
     }
 
+    console.log('🔵 UserService: usuario existente:', {
+      id: existingUser.id,
+      role: existingUser.role,
+      email: existingUser.email,
+      stationId: existingUser.stationId
+    });
+
     // Restricciones por rol
     if (currentUser) {
-      // SUPERVISOR: solo puede asignar responsabilidades a empleados que supervisa
-      if (currentUser.role === UserRole.SUPERVISOR) {
-        if (
-          existingUser.role !== UserRole.EMPLOYEE ||
-          existingUser.supervisorId !== currentUser.userId
-        ) {
-          throw new ConflictException('No tiene permisos para editar este usuario');
-        }
-        // Supervisor NO puede cambiar: nombre, email, categoría, stationId, role
-        const allowedFields = ['password']; // Solo campos de responsabilidades/asignaciones
-        const filteredDto = {};
-        allowedFields.forEach(field => {
-          if (updateUserDto[field]) {
-            filteredDto[field] = updateUserDto[field];
-          }
-        });
-        updateUserDto = filteredDto as UpdateUserDto;
-      }
+      console.log('🔵 UserService: validando permisos para rol:', currentUser.role);
 
-      // MANAGER: puede editar empleados y supervisores de su estación (más permisos que supervisor)
-      if (currentUser.role === UserRole.MANAGER) {
-        // Manager puede editar empleados y supervisores de su estación
-        if (
-          (existingUser.role !== UserRole.EMPLOYEE && existingUser.role !== UserRole.SUPERVISOR) ||
-          existingUser.stationId !== currentUser.stationId
-        ) {
-          throw new ConflictException('No tiene permisos para editar este usuario');
-        }
-        // Manager puede cambiar: nombre, email, categoría, stationId de empleados y supervisores, pero NO role
-        if ('role' in updateUserDto) {
-          delete updateUserDto.role;
-        }
-      }
-
-      // ADMIN: puede editar cualquier usuario y asignar stationId a managers/supervisores
+      // ADMIN: puede editar cualquier usuario excepto PRESIDENT
       if (currentUser.role === UserRole.ADMIN) {
-        // Admin puede cambiar todo, incluyendo stationId de managers y supervisores
-        // Solo no puede cambiar role de PRESIDENT o crear PRESIDENT
-        if (updateUserDto.role === UserRole.PRESIDENT) {
-          throw new ConflictException('No puede asignar rol de Presidente');
-        }
+        console.log('🔵 UserService: usuario es ADMIN, verificando restricciones');
         if (existingUser.role === UserRole.PRESIDENT) {
-          throw new ConflictException('No puede editar al Presidente');
+          throw new ConflictException('Los administradores no pueden editar información del Presidente');
+        }
+        if (updateUserDto.role === UserRole.PRESIDENT) {
+          throw new ConflictException('Los administradores no pueden asignar el rol de Presidente');
         }
       }
 
-      // PRESIDENT: solo puede visualizar, no puede editar nada
+      // MANAGER: puede editar empleados y supervisores de su estación y cambiar roles
+      if (currentUser.role === UserRole.MANAGER) {
+        console.log('🔵 UserService: usuario es MANAGER, verificando restricciones');
+        
+        // Verificar que el usuario a editar pertenece a su estación o no tiene estación (para poder asignarle una)
+        if (existingUser.stationId && existingUser.stationId !== currentUser.stationId) {
+          throw new ConflictException(`Los gerentes solo pueden editar usuarios de su estación. Usuario objetivo tiene estación ${existingUser.stationId}, manager tiene estación ${currentUser.stationId}`);
+        }
+        
+        // Verificar que solo edita empleados y supervisores
+        if (existingUser.role !== UserRole.EMPLOYEE && existingUser.role !== UserRole.SUPERVISOR) {
+          throw new ConflictException(`Los gerentes solo pueden editar empleados y supervisores. El usuario objetivo tiene rol: ${existingUser.role}`);
+        }
+        
+        // Manager puede cambiar roles pero no a niveles superiores
+        if (updateUserDto.role && [UserRole.MANAGER, UserRole.ADMIN, UserRole.PRESIDENT].includes(updateUserDto.role)) {
+          throw new ConflictException(`Los gerentes no pueden asignar roles de gerente, administrador o presidente. Rol solicitado: ${updateUserDto.role}`);
+        }
+      }
+
+      // PRESIDENT: solo puede visualizar (no editar)
       if (currentUser.role === UserRole.PRESIDENT) {
         throw new ConflictException('El Presidente solo tiene permisos de visualización');
       }
     }
 
-    // Validar que los empleados, supervisores y managers tengan estación asignada
-    // Solo presidentes y administradores pueden no tener estación
+    // Validar que empleados, supervisores y managers tengan estación asignada
     if (updateUserDto.role && 
         updateUserDto.role !== UserRole.PRESIDENT && 
         updateUserDto.role !== UserRole.ADMIN && 
         !updateUserDto.stationId && 
         !existingUser.stationId) {
-      throw new BadRequestException('Los empleados, supervisores y managers deben tener una estación asignada');
+      throw new BadRequestException('Los empleados, supervisores y gerentes deben tener una estación asignada');
     }
 
-    // Si se está actualizando el email, verificar que no exista otro usuario con ese email
+    // Si se envía stationId en la actualización, está bien (aunque el usuario existente no la tenga)
+    if (updateUserDto.stationId) {
+      console.log('🔵 UserService: asignando estación', updateUserDto.stationId, 'al usuario');
+    }
+
+    // Validar email único
     if (updateUserDto.email && updateUserDto.email !== existingUser.email) {
       const userWithEmail = await this.userRepository.findOneBy({
         email: updateUserDto.email,
@@ -257,11 +263,26 @@ export class UserService {
     }
 
     try {
-      // Si se está actualizando la contraseña, encriptarla
+      // Encriptar contraseña si se proporciona
       const updateData = { ...updateUserDto };
       if (updateData.password) {
         updateData.password = await bcrypt.hash(updateData.password, 12);
       }
+
+      // Convertir category a categories si se envía
+      if (updateData.category) {
+        updateData.categories = [updateData.category];
+        delete updateData.category;
+        console.log('🔵 UserService: convirtiendo category a categories:', updateData.categories);
+      }
+
+      // Validar que categories sea un array si se envía
+      if (updateData.categories && !Array.isArray(updateData.categories)) {
+        updateData.categories = [updateData.categories];
+        console.log('🔵 UserService: convirtiendo categories a array:', updateData.categories);
+      }
+
+      console.log('🔵 UserService: datos finales a actualizar:', updateData);
 
       // Actualizar el usuario
       await this.userRepository.update(id, updateData);
@@ -273,11 +294,13 @@ export class UserService {
         throw new NotFoundException(`Usuario con ID ${id} no encontrado después de la actualización`);
       }
 
+      console.log('✅ UserService: usuario actualizado exitosamente');
       // Remover la contraseña de la respuesta
       const { password, ...userResponse } = updatedUser;
       return userResponse as User;
     } catch (error) {
-      if (error instanceof ConflictException || error instanceof NotFoundException) {
+      console.error('❌ UserService: error al actualizar usuario:', error);
+      if (error instanceof ConflictException || error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
       throw new BadRequestException('Error al actualizar el usuario: ' + error.message);

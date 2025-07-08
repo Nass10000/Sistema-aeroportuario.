@@ -15,7 +15,7 @@ export class PunchController {
   constructor(private readonly punchService: PunchService) {}
 
   @Post()
-  @Roles(UserRole.EMPLOYEE, UserRole.SUPERVISOR) // Solo empleados y sus supervisores pueden hacer marcajes
+  @Roles(UserRole.EMPLOYEE, UserRole.SUPERVISOR, UserRole.MANAGER) // Empleados, supervisores y managers pueden hacer marcajes
   @ApiOperation({ 
     summary: 'Registrar marcaje de tiempo',
     description: 'Permite a un usuario registrar entrada o salida con validaciones de seguridad'
@@ -25,7 +25,14 @@ export class PunchController {
   @ApiResponse({ status: 401, description: 'Token JWT requerido' })
   @ApiResponse({ status: 429, description: 'Límite de solicitudes excedido' })
   async punch(@Request() req, @Body() createPunchDto: CreatePunchDto) {
-    return this.punchService.punch(req.user, createPunchDto.type, createPunchDto.comment);
+    try {
+      console.log('🔵 PunchController: usuario autenticado:', req.user);
+      console.log('🔵 PunchController: datos recibidos:', createPunchDto);
+      return await this.punchService.punch(req.user, createPunchDto.type, createPunchDto.comment);
+    } catch (error) {
+      console.error('❌ PunchController: error en punch:', error);
+      throw error;
+    }
   }
 
   @Get('me')

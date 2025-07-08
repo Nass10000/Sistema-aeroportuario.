@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, ParseIntPipe, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Delete, ParseIntPipe, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { UserService } from './user.service';
 import { CreateUserDto } from '../dto/create-user.dto';
@@ -73,7 +73,7 @@ export class UserController {
   }
 
   @Post(':id')
-  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({ summary: 'Actualizar usuario' })
   @ApiParam({ name: 'id', description: 'ID del usuario', type: 'number' })
   @ApiBody({ type: CreateUserDto, description: 'Datos del usuario a actualizar' })
@@ -81,7 +81,33 @@ export class UserController {
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
   @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
   async update(@Param('id', ParseIntPipe) id: number, @Body() updateUserDto: any, @Request() req) {
-    return this.userService.update(id, updateUserDto, req.user);
+    try {
+      console.log('🔵 UserController: actualizando usuario', id, 'con datos:', updateUserDto);
+      console.log('🔵 UserController: usuario actual:', req.user);
+      return await this.userService.update(id, updateUserDto, req.user);
+    } catch (error) {
+      console.error('❌ UserController: error en update:', error);
+      throw error;
+    }
+  }
+
+  @Put(':id')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Actualizar usuario (método PUT)' })
+  @ApiParam({ name: 'id', description: 'ID del usuario', type: 'number' })
+  @ApiBody({ type: CreateUserDto, description: 'Datos del usuario a actualizar' })
+  @ApiResponse({ status: 200, description: 'Usuario actualizado', type: User })
+  @ApiResponse({ status: 400, description: 'Datos inválidos' })
+  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
+  async updatePut(@Param('id', ParseIntPipe) id: number, @Body() updateUserDto: any, @Request() req) {
+    try {
+      console.log('🔵 UserController PUT: actualizando usuario', id, 'con datos:', updateUserDto);
+      console.log('🔵 UserController PUT: usuario actual:', req.user);
+      return await this.userService.update(id, updateUserDto, req.user);
+    } catch (error) {
+      console.error('❌ UserController PUT: error en update:', error);
+      throw error;
+    }
   }
 
   // Endpoint temporal para testing sin autenticación
