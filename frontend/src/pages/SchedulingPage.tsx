@@ -6,8 +6,9 @@ const SchedulingPage: React.FC = () => {
   const [operations, setOperations] = useState<Operation[]>([]);
   const [selectedOperation, setSelectedOperation] = useState<number | null>(null);
   const [availableStaff, setAvailableStaff] = useState<any[]>([]);
+  const [optimizationResult, setOptimizationResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [selectedView, setSelectedView] = useState<'availability' | 'assignment' | 'optimization'>('availability');
+  const [selectedView, setSelectedView] = useState<'availability' | 'optimization'>('availability');
 
   useEffect(() => {
     fetchInitialData();
@@ -65,32 +66,33 @@ const SchedulingPage: React.FC = () => {
 
   const checkAvailability = async (operationId: number) => {
     setLoading(true);
+    setAvailableStaff([]);
     try {
+      console.log('🔵 Verificando disponibilidad para operación:', operationId);
       const data = await schedulingService.getAvailableStaff(operationId);
-      setAvailableStaff(data);
+      console.log('🔵 Personal disponible recibido:', data);
+      
+      // Transformar datos del backend al formato esperado por el frontend
+      const transformedData = data.map((user: any) => ({
+        userId: user.id,
+        name: user.name,
+        role: user.role,
+        skills: user.skills || [],
+        currentAssignments: user.currentAssignments || 0,
+        availability: user.isAvailable ? 'available' : 'unavailable',
+        experience: user.experience || 'junior',
+        station: user.station?.name || 'N/A',
+        email: user.email
+      }));
+      
+      setAvailableStaff(transformedData);
+      
+      if (transformedData.length === 0) {
+        alert('No hay personal disponible para esta operación');
+      }
     } catch (error) {
-      console.error('Error checking availability:', error);
-      // Datos de ejemplo
-      setAvailableStaff([
-        {
-          userId: 1,
-          name: 'Juan Pérez',
-          role: 'employee',
-          skills: ['ground_handling', 'baggage'],
-          currentAssignments: 2,
-          availability: 'available',
-          experience: 'senior'
-        },
-        {
-          userId: 2,
-          name: 'María González',
-          role: 'employee',
-          skills: ['security', 'customer_service'],
-          currentAssignments: 1,
-          availability: 'limited',
-          experience: 'junior'
-        }
-      ]);
+      console.error('❌ Error checking availability:', error);
+      alert('Error al verificar disponibilidad: ' + (error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -108,25 +110,24 @@ const SchedulingPage: React.FC = () => {
 
   const getOptimalStaffing = async (operationId: number) => {
     setLoading(true);
+    setOptimizationResult(null);
     try {
-      const optimal = await schedulingService.getOptimalStaffing(operationId);
-      console.log('Optimal staffing:', optimal);
-      alert('Configuración óptima calculada');
+      console.log('🔵 Calculando configuración óptima para operación:', operationId);
+      const result = await schedulingService.getOptimalStaffing(operationId);
+      console.log('🔵 Resultado de optimización:', result);
+      
+      setOptimizationResult(result);
+      
+      if (result.availableStaff.length === 0) {
+        alert('Advertencia: No hay personal disponible para esta operación');
+      } else {
+        alert(`Configuración óptima calculada:\n- Personal mínimo: ${result.minimumStaff}\n- Personal recomendado: ${result.recommendedStaff}\n- Personal disponible: ${result.availableStaff.length}`);
+      }
     } catch (error) {
-      console.error('Error getting optimal staffing:', error);
-      alert('Error al calcular configuración óptima');
+      console.error('❌ Error getting optimal staffing:', error);
+      alert('Error al calcular configuración óptima: ' + (error as Error).message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const createReplacement = async (replacementData: any) => {
-    try {
-      await schedulingService.createReplacement(replacementData);
-      alert('Reemplazo creado exitosamente');
-    } catch (error) {
-      console.error('Error creating replacement:', error);
-      alert('Error al crear reemplazo');
     }
   };
 
@@ -195,13 +196,27 @@ const SchedulingPage: React.FC = () => {
                   <div>
                     <span className="font-medium text-gray-300">Habilidades:</span>
                     <div className="flex flex-wrap gap-1 mt-1">
-                      {staff.skills?.map((skill: string, index: number) => (
-                        <span key={index} className="px-2 py-1 bg-blue-900 text-blue-200 text-xs rounded">
-                          {skill}
-                        </span>
-                      ))}
+                      {staff.skills && staff.skills.length > 0 ? (
+                        staff.skills.map((skill: string, index: number) => (
+                          <span key={index} className="px-2 py-1 bg-blue-900 text-blue-200 text-xs rounded">
+                            {skill}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-gray-400 text-xs">Sin habilidades específicas</span>
+                      )}
                     </div>
                   </div>
+                  {staff.station && (
+                    <p className="text-gray-300">
+                      <span className="font-medium">Estación:</span> {staff.station}
+                    </p>
+                  )}
+                  {staff.email && (
+                    <p className="text-gray-300 text-xs">
+                      <span className="font-medium">Email:</span> {staff.email}
+                    </p>
+                  )}
                 </div>
                 
                 <button
@@ -220,119 +235,6 @@ const SchedulingPage: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
-  );
-
-  const renderAssignmentView = () => (
-    <div className="space-y-6">
-      <div className="card">
-        <h3 className="text-lg font-semibold text-white mb-4">Crear Nueva Asignación</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Empleado
-              </label>
-              <select className="input-field">
-                <option value="">Selecciona un empleado</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name} - {user.role}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Operación
-              </label>
-              <select className="input-field">
-                <option value="">Selecciona una operación</option>
-                {operations.map((op) => (
-                  <option key={op.id} value={op.id}>
-                    {op.flightNumber} - {op.name || 'N/A'}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Hora de inicio
-              </label>
-              <input
-                type="datetime-local"
-                className="input-field"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Hora de fin
-              </label>
-              <input
-                type="datetime-local"
-                className="input-field"
-              />
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex space-x-4 mt-6">
-          <button className="btn-primary">
-            Crear Asignación
-          </button>
-          <button className="btn-secondary">
-            Validar Antes de Crear
-          </button>
-        </div>
-      </div>
-
-      <div className="card">
-        <h3 className="text-lg font-semibold text-white mb-4">Crear Reemplazo</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Empleado Original
-            </label>
-            <select className="input-field">
-              <option value="">Selecciona empleado</option>
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Empleado Reemplazo
-            </label>
-            <select className="input-field">
-              <option value="">Selecciona reemplazo</option>
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-end">
-            <button 
-              onClick={() => createReplacement({
-                originalUserId: 1,
-                replacementUserId: 2,
-                reason: 'Enfermedad',
-                date: new Date().toISOString()
-              })}
-              className="btn-primary w-full"
-            >
-              Crear Reemplazo
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 
@@ -364,68 +266,179 @@ const SchedulingPage: React.FC = () => {
               disabled={!selectedOperation || loading}
               className="btn-primary disabled:opacity-50"
             >
-              {loading ? 'Optimizando...' : 'Calcular Configuración Óptima'}
+              {loading ? 'Calculando...' : 'Calcular Configuración Óptima'}
             </button>
           </div>
         </div>
       </div>
 
+      {optimizationResult && (
+        <div className="card">
+          <h3 className="text-lg font-semibold text-white mb-4">Resultado de Optimización</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div className="stat-card">
+              <h3 className="text-sm font-medium text-gray-400">Personal Mínimo</h3>
+              <p className="text-2xl font-bold text-white">{optimizationResult.minimumStaff}</p>
+              <p className="text-xs text-gray-400 mt-1">Requerido</p>
+            </div>
+            <div className="stat-card">
+              <h3 className="text-sm font-medium text-gray-400">Personal Recomendado</h3>
+              <p className="text-2xl font-bold text-white">{optimizationResult.recommendedStaff}</p>
+              <p className="text-xs text-gray-400 mt-1">Óptimo</p>
+            </div>
+            <div className="stat-card">
+              <h3 className="text-sm font-medium text-gray-400">Personal Disponible</h3>
+              <p className="text-2xl font-bold text-white">{optimizationResult.availableStaff.length}</p>
+              <p className="text-xs text-gray-400 mt-1">Actual</p>
+            </div>
+          </div>
+
+          {optimizationResult.skillsNeeded && optimizationResult.skillsNeeded.length > 0 && (
+            <div className="mb-6">
+              <h4 className="text-white font-medium mb-3">Habilidades Requeridas</h4>
+              <div className="flex flex-wrap gap-2">
+                {optimizationResult.skillsNeeded.map((skill: string, index: number) => (
+                  <span key={index} className="px-3 py-1 bg-purple-900 text-purple-200 text-sm rounded">
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <h4 className="text-white font-medium mb-3">Personal Disponible</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {optimizationResult.availableStaff.map((staff: any, index: number) => (
+                <div key={index} className="bg-gray-700 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h5 className="text-white font-medium">{staff.name}</h5>
+                    <span className="px-2 py-1 text-xs rounded-full bg-green-900 text-green-200">
+                      Disponible
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-300">
+                    <p><span className="font-medium">Rol:</span> {staff.role}</p>
+                    <p><span className="font-medium">Estación:</span> {staff.station?.name || 'N/A'}</p>
+                    {staff.skills && staff.skills.length > 0 && (
+                      <div className="mt-2">
+                        <span className="font-medium">Habilidades:</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {staff.skills.map((skill: string, skillIndex: number) => (
+                            <span key={skillIndex} className="px-2 py-1 bg-blue-900 text-blue-200 text-xs rounded">
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="stat-card">
           <h3 className="text-sm font-medium text-gray-400">Eficiencia Actual</h3>
-          <p className="text-2xl font-bold text-white">78%</p>
-          <p className="text-xs text-gray-400 mt-1">Promedio del mes</p>
+          <p className="text-2xl font-bold text-white">
+            {optimizationResult 
+              ? Math.round((optimizationResult.availableStaff.length / optimizationResult.recommendedStaff) * 100)
+              : 78}%
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            {optimizationResult ? 'Calculado' : 'Promedio del mes'}
+          </p>
         </div>
         <div className="stat-card">
-          <h3 className="text-sm font-medium text-gray-400">Costos de Personal</h3>
-          <p className="text-2xl font-bold text-white">$24,560</p>
-          <p className="text-xs text-gray-400 mt-1">Este mes</p>
+          <h3 className="text-sm font-medium text-gray-400">Cobertura de Habilidades</h3>
+          <p className="text-2xl font-bold text-white">
+            {optimizationResult 
+              ? Math.round((optimizationResult.skillsNeeded?.length || 0) / Math.max(1, optimizationResult.availableStaff.length) * 100)
+              : 85}%
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            {optimizationResult ? 'Actual' : 'Promedio'}
+          </p>
         </div>
         <div className="stat-card">
-          <h3 className="text-sm font-medium text-gray-400">Horas Extra</h3>
-          <p className="text-2xl font-bold text-white">45h</p>
-          <p className="text-xs text-gray-400 mt-1">Esta semana</p>
+          <h3 className="text-sm font-medium text-gray-400">Personal Óptimo</h3>
+          <p className="text-2xl font-bold text-white">
+            {optimizationResult 
+              ? (optimizationResult.availableStaff.length >= optimizationResult.recommendedStaff ? '✓' : '⚠️')
+              : '⚠️'}
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            {optimizationResult 
+              ? (optimizationResult.availableStaff.length >= optimizationResult.recommendedStaff ? 'Suficiente' : 'Insuficiente')
+              : 'Pendiente'}
+          </p>
         </div>
       </div>
 
       <div className="card">
-        <h3 className="text-lg font-semibold text-white mb-4">Recomendaciones de Optimización</h3>
+        <h3 className="text-lg font-semibold text-white mb-4">Recomendaciones</h3>
         <div className="space-y-4">
-          <div className="flex items-start space-x-3 p-4 bg-blue-900 bg-opacity-30 rounded-lg">
-            <svg className="w-6 h-6 text-blue-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div>
-              <h4 className="text-white font-medium">Redistribuir Turnos</h4>
-              <p className="text-blue-200 text-sm">
-                Considerar redistribuir los turnos de la tarde para reducir horas extra en un 15%
-              </p>
+          {optimizationResult ? (
+            <>
+              {optimizationResult.availableStaff.length < optimizationResult.minimumStaff && (
+                <div className="flex items-start space-x-3 p-4 bg-red-900 bg-opacity-30 rounded-lg">
+                  <svg className="w-6 h-6 text-red-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.99-.833-2.768 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  <div>
+                    <h4 className="text-white font-medium">Personal Insuficiente</h4>
+                    <p className="text-red-200 text-sm">
+                      Se necesitan al menos {optimizationResult.minimumStaff} empleados. Solo hay {optimizationResult.availableStaff.length} disponibles.
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {optimizationResult.availableStaff.length >= optimizationResult.minimumStaff && 
+               optimizationResult.availableStaff.length < optimizationResult.recommendedStaff && (
+                <div className="flex items-start space-x-3 p-4 bg-yellow-900 bg-opacity-30 rounded-lg">
+                  <svg className="w-6 h-6 text-yellow-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <h4 className="text-white font-medium">Personal Limitado</h4>
+                    <p className="text-yellow-200 text-sm">
+                      Se recomienda {optimizationResult.recommendedStaff} empleados para operación óptima. Considere asignar {optimizationResult.recommendedStaff - optimizationResult.availableStaff.length} empleados adicionales.
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {optimizationResult.availableStaff.length >= optimizationResult.recommendedStaff && (
+                <div className="flex items-start space-x-3 p-4 bg-green-900 bg-opacity-30 rounded-lg">
+                  <svg className="w-6 h-6 text-green-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <h4 className="text-white font-medium">Personal Óptimo</h4>
+                    <p className="text-green-200 text-sm">
+                      Hay suficiente personal disponible para la operación. {optimizationResult.availableStaff.length} empleados están listos.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex items-start space-x-3 p-4 bg-blue-900 bg-opacity-30 rounded-lg">
+              <svg className="w-6 h-6 text-blue-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <h4 className="text-white font-medium">Seleccione una Operación</h4>
+                <p className="text-blue-200 text-sm">
+                  Elija una operación y haga clic en "Calcular Configuración Óptima" para obtener recomendaciones específicas.
+                </p>
+              </div>
             </div>
-          </div>
-          
-          <div className="flex items-start space-x-3 p-4 bg-yellow-900 bg-opacity-30 rounded-lg">
-            <svg className="w-6 h-6 text-yellow-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.99-.833-2.768 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
-            <div>
-              <h4 className="text-white font-medium">Capacitación Cruzada</h4>
-              <p className="text-yellow-200 text-sm">
-                3 empleados necesitan capacitación en habilidades adicionales para mayor flexibilidad
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex items-start space-x-3 p-4 bg-green-900 bg-opacity-30 rounded-lg">
-            <svg className="w-6 h-6 text-green-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div>
-              <h4 className="text-white font-medium">Ahorro Potencial</h4>
-              <p className="text-green-200 text-sm">
-                Optimización podría ahorrar hasta $3,200 mensuales en costos de personal
-              </p>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
@@ -447,17 +460,7 @@ const SchedulingPage: React.FC = () => {
               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
           }`}
         >
-          Disponibilidad
-        </button>
-        <button
-          onClick={() => setSelectedView('assignment')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            selectedView === 'assignment'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-          }`}
-        >
-          Asignaciones
+          Verificar Disponibilidad
         </button>
         <button
           onClick={() => setSelectedView('optimization')}
@@ -467,13 +470,12 @@ const SchedulingPage: React.FC = () => {
               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
           }`}
         >
-          Optimización
+          Optimización de Personal
         </button>
       </div>
 
       {/* Contenido dinámico */}
       {selectedView === 'availability' && renderAvailabilityView()}
-      {selectedView === 'assignment' && renderAssignmentView()}
       {selectedView === 'optimization' && renderOptimizationView()}
     </div>
   );
