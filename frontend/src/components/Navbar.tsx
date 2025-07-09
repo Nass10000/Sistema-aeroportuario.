@@ -6,6 +6,17 @@ interface NavbarProps {
   onLogout: () => void;
 }
 
+const translateRole = (role: string): string => {
+  switch (role?.toUpperCase()) {
+    case 'ADMIN': return 'Administrador';
+    case 'MANAGER': return 'Gerente';
+    case 'SUPERVISOR': return 'Supervisor';
+    case 'EMPLOYEE': return 'Empleado';
+    case 'PRESIDENT': return 'Presidente';
+    default: return 'Usuario';
+  }
+};
+
 const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
   const handleLogout = () => {
     authService.logout();
@@ -13,20 +24,13 @@ const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
   };
 
   const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'admin': return 'bg-red-600';
-      case 'manager': return 'bg-blue-600';
-      case 'employee': return 'bg-green-600';
+    switch (role?.toUpperCase()) {
+      case 'ADMIN': return 'bg-red-600';
+      case 'PRESIDENT': return 'bg-purple-600';
+      case 'MANAGER': return 'bg-blue-600';
+      case 'SUPERVISOR': return 'bg-indigo-600';
+      case 'EMPLOYEE': return 'bg-green-600';
       default: return 'bg-gray-600';
-    }
-  };
-
-  const getRoleName = (role: string) => {
-    switch (role) {
-      case 'admin': return 'Administrador';
-      case 'manager': return 'Gerente';
-      case 'employee': return 'Empleado';
-      default: return 'Usuario';
     }
   };
 
@@ -57,7 +61,7 @@ const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
                   <p className="text-sm font-medium text-white">{user.name}</p>
                   <div className="flex items-center space-x-2">
                     <span className={`px-2 py-1 text-xs font-medium text-white rounded-full ${getRoleColor(user.role)}`}>
-                      {getRoleName(user.role)}
+                      {translateRole(user.role)}
                     </span>
                   </div>
                 </div>

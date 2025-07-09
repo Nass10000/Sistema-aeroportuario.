@@ -175,6 +175,33 @@ export interface Punch {
   comment?: string;
 }
 
+// Nuevos tipos para gestión de estaciones
+export interface AssignStationRequest {
+  userId: number;
+  stationId: number;
+}
+
+export interface StaffOptimizationResult {
+  recommendedAssignments: StaffRecommendation[];
+  minimumStaffMet: boolean;
+  optimizationSuggestions: string[];
+  staffAvailability: {
+    available: number;
+    required: number;
+    shortage: number;
+  };
+}
+
+export interface StaffRecommendation {
+  userId: number;
+  name: string;
+  role: UserRole;
+  skills: string[];
+  certifications: string[];
+  recommendationScore: number;
+  recommendedPosition: string;
+}
+
 // Configuración de axios con timeout y retry - VERSIÓN ACTUALIZADA
 class ApiService {
   private api: AxiosInstance;
@@ -777,6 +804,49 @@ export const userService = {
       console.error('❌ Error deleting user:', error);
       throw new Error(error.response?.data?.message || 'Error al eliminar usuario');
     }
+  },
+
+  // Nuevos métodos para gestión de estaciones
+  async assignStation(userId: number, stationId: number): Promise<User> {
+    try {
+      const response = await apiService.post<User>(`/users/${userId}/assign-station`, {
+        stationId
+      });
+      return response;
+    } catch (error: any) {
+      console.error('❌ Error assigning station:', error);
+      throw new Error(error.response?.data?.message || 'Error al asignar estación');
+    }
+  },
+
+  async removeStationAssignment(userId: number): Promise<User> {
+    try {
+      const response = await apiService.delete<User>(`/users/${userId}/station`);
+      return response;
+    } catch (error: any) {
+      console.error('❌ Error removing station assignment:', error);
+      throw new Error(error.response?.data?.message || 'Error al remover asignación de estación');
+    }
+  },
+
+  async checkStaffAvailability(stationId: number, requiredStaff: number, operationDate: string): Promise<{
+    hasEnoughStaff: boolean;
+    availableStaff: number;
+    suggestions: string[];
+  }> {
+    try {
+      const response = await apiService.get<{
+        hasEnoughStaff: boolean;
+        availableStaff: number;
+        suggestions: string[];
+      }>(`/users/staff-availability/${stationId}`, {
+        params: { requiredStaff, operationDate }
+      });
+      return response;
+    } catch (error: any) {
+      console.error('❌ Error checking staff availability:', error);
+      throw new Error(error.response?.data?.message || 'Error al verificar disponibilidad de personal');
+    }
   }
 };
 
@@ -1202,35 +1272,14 @@ export const schedulingService = {
     }
   },
 
-  async getAvailableStaff(operationId: number, skills?: string[]): Promise<any> {
+  // Nuevo método para optimización de personal
+  async optimizeStaffing(operationId: number): Promise<StaffOptimizationResult> {
     try {
-      const response = await apiService.get<any>(`/scheduling/available-staff/${operationId}`, { 
-        params: { skills: skills?.join(',') } 
-      });
+      const response = await apiService.get<StaffOptimizationResult>(`/scheduling/optimize-staffing/${operationId}`);
       return response;
     } catch (error: any) {
-      console.error('❌ Error fetching available staff:', error);
-      throw new Error(error.response?.data?.message || 'Error al obtener personal disponible');
-    }
-  },
-
-  async createReplacement(replacementData: any): Promise<any> {
-    try {
-      const response = await apiService.post<any>('/scheduling/create-replacement', replacementData);
-      return response;
-    } catch (error: any) {
-      console.error('❌ Error creating replacement:', error);
-      throw new Error(error.response?.data?.message || 'Error al crear reemplazo');
-    }
-  },
-
-  async getOptimalStaffing(operationId: number): Promise<any> {
-    try {
-      const response = await apiService.get<any>(`/scheduling/optimal-staffing/${operationId}`);
-      return response;
-    } catch (error: any) {
-      console.error('❌ Error fetching optimal staffing:', error);
-      throw new Error(error.response?.data?.message || 'Error al obtener dotación óptima');
+      console.error('❌ Error optimizing staffing:', error);
+      throw new Error(error.response?.data?.message || 'Error al optimizar personal');
     }
   }
 };
