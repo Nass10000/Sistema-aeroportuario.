@@ -2,6 +2,7 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
+import { APP_FILTER } from '@nestjs/core';
 
 import { User } from './user/user.entity';
 import { Station } from './station/station.entity';
@@ -21,6 +22,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { ReportsModule } from './reports/reports.module';
 import { SchedulingModule } from './scheduling/scheduling.module';
 import { SecurityMiddleware } from './common/middleware/security.middleware';
+import { ImprovedSecurityExceptionFilter } from './common/filters/improved-security-exception.filter';
 
 @Module({
   imports: [
@@ -53,7 +55,12 @@ import { SecurityMiddleware } from './common/middleware/security.middleware';
     ReportsModule,
     SchedulingModule,
   ],
-  providers: [],
+  providers: [
+    {
+      provide: APP_FILTER,
+      useClass: ImprovedSecurityExceptionFilter,
+    },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

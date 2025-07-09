@@ -46,10 +46,12 @@ export class OperationController {
   }
 
   @Delete(':id')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER) // Solo ADMIN y MANAGER pueden eliminar operaciones
   @ApiOperation({ summary: 'Eliminar operación' })
   @ApiParam({ name: 'id', description: 'ID de la operación a eliminar', type: 'number' })
   @ApiResponse({ status: 200, description: 'Operación eliminada exitosamente' })
   @ApiResponse({ status: 400, description: 'ID inválido' })
+  @ApiResponse({ status: 403, description: 'No tienes permisos para eliminar operaciones' })
   @ApiResponse({ status: 404, description: 'Operación no encontrada' })
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.operationService.remove(id);

@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Body, Param, Delete, ParseIntPipe, UseGuard
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { UserService } from './user.service';
 import { CreateUserDto } from '../dto/create-user.dto';
+import { AssignStationDto } from '../dto/assign-station.dto';
 import { User } from './user.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -115,6 +116,31 @@ export class UserController {
   @ApiOperation({ summary: 'Test endpoint sin autenticación' })
   async test() {
     return { message: 'Servidor funcionando correctamente', timestamp: new Date() };
+  }
+
+  // Nuevos endpoints para gestión de estaciones
+  @Post(':id/assign-station')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER) // Solo ADMIN puede asignar cualquier estación, MANAGER solo en su área
+  @ApiOperation({ summary: 'Asignar estación a usuario' })
+  @ApiParam({ name: 'id', description: 'ID del usuario', type: 'number' })
+  @ApiBody({ type: AssignStationDto, description: 'Datos de asignación de estación' })
+  @ApiResponse({ status: 200, description: 'Estación asignada exitosamente', type: User })
+  @ApiResponse({ status: 400, description: 'Datos inválidos' })
+  @ApiResponse({ status: 403, description: 'No tienes permisos para asignar esta estación' })
+  @ApiResponse({ status: 404, description: 'Usuario o estación no encontrada' })
+  async assignStation(@Param('id', ParseIntPipe) id: number, @Body() assignStationDto: AssignStationDto, @Request() req) {
+    return this.userService.assignStation(id, assignStationDto.stationId, req.user);
+  }
+
+  @Delete(':id/station')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER) // Solo ADMIN y MANAGER pueden remover asignaciones
+  @ApiOperation({ summary: 'Remover asignación de estación' })
+  @ApiParam({ name: 'id', description: 'ID del usuario', type: 'number' })
+  @ApiResponse({ status: 200, description: 'Asignación de estación removida exitosamente', type: User })
+  @ApiResponse({ status: 403, description: 'No tienes permisos para remover esta asignación' })
+  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
+  async removeStationAssignment(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    return this.userService.removeStationAssignment(id, req.user);
   }
 }
 // Endpoint adicional fuera de la clase con guards para testing

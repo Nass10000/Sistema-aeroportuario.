@@ -1,10 +1,12 @@
-import { Injectable, BadRequestException, ConflictException, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';
+import { Station } from '../station/station.entity';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { UserRole } from '../common/enums/roles.enum';
+import { AssignmentStatus } from '../assignment/assignment.entity';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
@@ -14,6 +16,8 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(Station)
+    private stationRepository: Repository<Station>,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -304,6 +308,268 @@ export class UserService {
         throw error;
       }
       throw new BadRequestException('Error al actualizar el usuario: ' + error.message);
+    }
+  }
+
+  // Nuevos métodos para gestión de asignación de estaciones
+  async assignStation(userId: number, stationId: number, currentUser: any): Promise<User> {
+    // Verificar que el usuario existe
+    const user = await this.userRepository.findOneBy({ id: userId });
+    if (!user) {
+      throw new NotFoundException(`Usuario con ID ${userId} no encontrado`);
+    }
+
+    // Verificar que la estación existe
+    const station = await this.stationRepository.findOne({
+      where: { id: stationId },
+      relations: ['manager']
+    });
+    if (!station) {
+      throw new NotFoundException(`Estación con ID ${stationId} no encontrada`);
+    }
+
+    // Verificar permisos basados en roles
+    await this.validateStationAssignmentPermissions(currentUser, user, station);
+
+    // Verificar disponibilidad de personal mínimo antes de la asignación
+    await this.checkMinimumStaffRequirement(stationId, userId);
+
+    try {
+      // Asignar la estación
+      await this.userRepository.update(userId, { stationId });
+
+      // Obtener el usuario actualizado
+      const updatedUser = await this.userRepository.findOne({
+        where: { id: userId },
+        relations: ['managedStations']
+      });
+
+      if (!updatedUser) {
+        throw new NotFoundException('Usuario no encontrado después de la actualización');
+      }
+
+      this.logger.log(`Estación ${stationId} asignada al usuario ${userId} por ${currentUser.email}`);
+      
+      // Remover la contraseña de la respuesta
+      const { password, ...userResponse } = updatedUser;
+      return userResponse as User;
+    } catch (error) {
+      this.logger.error(`Error al asignar estación: ${error.message}`);
+      throw new BadRequestException('Error al asignar la estación: ' + error.message);
+    }
+  }
+
+  async removeStationAssignment(userId: number, currentUser: any): Promise<User> {
+    // Verificar que el usuario existe
+    const user = await this.userRepository.findOneBy({ id: userId });
+    if (!user) {
+      throw new NotFoundException(`Usuario con ID ${userId} no encontrado`);
+    }
+
+    // Verificar permisos
+    if (currentUser.role !== UserRole.ADMIN && 
+        currentUser.role !== UserRole.MANAGER) {
+      throw new ForbiddenException('No tienes permisos para remover asignaciones de estación');
+    }
+
+    // Si es MANAGER, solo puede remover asignaciones de su propia estación
+    if (currentUser.role === UserRole.MANAGER && 
+        currentUser.stationId !== user.stationId) {
+      throw new ForbiddenException('Solo puedes remover asignaciones de tu estación');
+    }
+
+    // Verificar que no se quede sin personal mínimo
+    if (user.stationId) {
+      await this.checkMinimumStaffRequirement(user.stationId, userId, true);
+    }
+
+    try {
+      // Remover la asignación de estación
+      await this.userRepository.update(userId, { stationId: undefined });
+
+      // Obtener el usuario actualizado
+      const updatedUser = await this.userRepository.findOneBy({ id: userId });
+
+      if (!updatedUser) {
+        throw new NotFoundException('Usuario no encontrado después de la actualización');
+      }
+
+      this.logger.log(`Asignación de estación removida del usuario ${userId} por ${currentUser.email}`);
+      
+      // Remover la contraseña de la respuesta
+      const { password, ...userResponse } = updatedUser;
+      return userResponse as User;
+    } catch (error) {
+      this.logger.error(`Error al remover asignación de estación: ${error.message}`);
+      throw new BadRequestException('Error al remover la asignación de estación: ' + error.message);
+    }
+  }
+
+  private async validateStationAssignmentPermissions(currentUser: any, targetUser: User, station: Station): Promise<void> {
+    // Solo ADMIN puede asignar cualquier estación a cualquier usuario
+    if (currentUser.role === UserRole.ADMIN) {
+      return;
+    }
+
+    // MANAGER puede asignar solo empleados y supervisores a su estación
+    if (currentUser.role === UserRole.MANAGER) {
+      // Verificar que el usuario actual es manager de la estación
+      if (currentUser.stationId !== station.id) {
+        throw new ForbiddenException('Solo puedes asignar usuarios a tu estación');
+      }
+
+      // Verificar que el usuario objetivo es empleado o supervisor
+      if (targetUser.role !== UserRole.EMPLOYEE && targetUser.role !== UserRole.SUPERVISOR) {
+        throw new ForbiddenException('Los gerentes solo pueden asignar empleados y supervisores');
+      }
+
+      return;
+    }
+
+    // Otros roles no pueden asignar estaciones
+    throw new ForbiddenException('No tienes permisos para asignar estaciones');
+  }
+
+  private async checkMinimumStaffRequirement(stationId: number, userId: number, isRemoving: boolean = false): Promise<void> {
+    // Obtener la estación con configuración de personal mínimo
+    const station = await this.stationRepository.findOneBy({ id: stationId });
+    if (!station || !station.minimumStaff) {
+      return; // Si no hay configuración, no validar
+    }
+
+    // Contar personal actual asignado a la estación
+    let currentStaffCount: number;
+    
+    if (isRemoving) {
+      // Excluir el usuario que se va a remover del conteo
+      currentStaffCount = await this.userRepository
+        .createQueryBuilder('user')
+        .where('user.stationId = :stationId', { stationId })
+        .andWhere('user.isActive = :isActive', { isActive: true })
+        .andWhere('user.id != :userId', { userId })
+        .getCount();
+    } else {
+      currentStaffCount = await this.userRepository.count({
+        where: { 
+          stationId: stationId,
+          isActive: true
+        }
+      });
+    }
+
+    const effectiveStaffCount = isRemoving ? currentStaffCount : currentStaffCount + 1;
+
+    if (isRemoving && effectiveStaffCount < station.minimumStaff) {
+      throw new BadRequestException(
+        `No se puede remover la asignación. La estación requiere un mínimo de ${station.minimumStaff} empleados y solo quedarían ${effectiveStaffCount}`
+      );
+    }
+
+    this.logger.log(`Estación ${stationId}: Personal actual: ${currentStaffCount}, Mínimo requerido: ${station.minimumStaff}`);
+  }
+
+  // Método para verificar disponibilidad de personal para operaciones
+  async checkStaffAvailabilityForOperation(stationId: number, requiredStaff: number, operationDate: Date): Promise<{
+    hasEnoughStaff: boolean;
+    availableStaff: number;
+    suggestions: string[];
+  }> {
+    try {
+      // Verificar que la estación existe
+      const station = await this.stationRepository.findOneBy({ id: stationId });
+      if (!station) {
+        throw new NotFoundException(`Estación con ID ${stationId} no encontrada`);
+      }
+
+      // Obtener todo el personal asignado a la estación
+      const stationStaff = await this.userRepository.find({
+        where: {
+          stationId: stationId,
+          isActive: true
+        },
+        relations: ['assignments']
+      });
+
+      this.logger.log(`Verificando disponibilidad para estación ${stationId} en fecha ${operationDate.toISOString()}`);
+      this.logger.log(`Personal total en estación: ${stationStaff.length}`);
+
+      // Definir el rango de tiempo para la operación (asumiendo un turno de 8 horas)
+      const startOfDay = new Date(operationDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(operationDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      let availableStaff = 0;
+      const unavailableReasons: string[] = [];
+
+      for (const staff of stationStaff) {
+        // Verificar disponibilidad general
+        if (!staff.isAvailable) {
+          unavailableReasons.push(`${staff.name}: No disponible (marcado como no disponible)`);
+          continue;
+        }
+
+        // Verificar asignaciones conflictivas en el día
+        const conflictingAssignments = staff.assignments?.filter(assignment => {
+          const assignmentStart = new Date(assignment.startTime);
+          const assignmentEnd = new Date(assignment.endTime);
+          
+          return (
+            assignment.status !== AssignmentStatus.CANCELLED &&
+            assignment.status !== AssignmentStatus.COMPLETED &&
+            assignmentStart <= endOfDay &&
+            assignmentEnd >= startOfDay
+          );
+        }) || [];
+
+        if (conflictingAssignments.length > 0) {
+          unavailableReasons.push(`${staff.name}: Ya tiene ${conflictingAssignments.length} asignaciones ese día`);
+          continue;
+        }
+
+        // Verificar horas semanales (simplificado: asumiendo que no está en el límite)
+        const maxWeeklyHours = staff.maxWeeklyHours || 40;
+        const maxDailyHours = staff.maxDailyHours || 8;
+
+        // Si llega aquí, está disponible
+        availableStaff++;
+      }
+
+      const hasEnoughStaff = availableStaff >= requiredStaff;
+      const suggestions: string[] = [];
+
+      this.logger.log(`Personal disponible: ${availableStaff}/${stationStaff.length}, Requerido: ${requiredStaff}`);
+
+      if (!hasEnoughStaff) {
+        const shortage = requiredStaff - availableStaff;
+        suggestions.push(`Se necesitan ${shortage} empleados adicionales para esta operación`);
+        
+        if (unavailableReasons.length > 0) {
+          suggestions.push(`Personal no disponible: ${unavailableReasons.slice(0, 3).join(', ')}${unavailableReasons.length > 3 ? '...' : ''}`);
+        }
+
+        suggestions.push('Considera reasignar personal de otras estaciones');
+        suggestions.push('Evalúa reprogramar la operación para otro momento');
+        suggestions.push(`La estación requiere mínimo ${station.minimumStaff} personal permanente`);
+      } else {
+        suggestions.push(`Personal suficiente disponible (${availableStaff} de ${requiredStaff} requeridos)`);
+        if (availableStaff > requiredStaff) {
+          suggestions.push(`Hay ${availableStaff - requiredStaff} empleados adicionales disponibles para flexibilidad`);
+        }
+      }
+
+      return {
+        hasEnoughStaff,
+        availableStaff,
+        suggestions
+      };
+    } catch (error) {
+      this.logger.error(`Error al verificar disponibilidad de personal: ${error.message}`);
+      return {
+        hasEnoughStaff: false,
+        availableStaff: 0,
+        suggestions: [`Error al verificar disponibilidad: ${error.message}`]
+      };
     }
   }
 }

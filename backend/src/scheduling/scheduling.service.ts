@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 import { Assignment, AssignmentStatus } from '../assignment/assignment.entity';
 import { User } from '../user/user.entity';
-import { ShiftType } from '../common/enums/roles.enum';
+import { ShiftType, UserRole } from '../common/enums/roles.enum';
 import { Operation } from '../operation/operation.entity';
 import { NotificationService } from '../notification/notification.service';
 
@@ -338,70 +338,170 @@ export class SchedulingService {
     availableStaff: User[];
     skillsNeeded: string[];
   }> {
-    try {
-      console.log('🔵 SchedulingService: calculando configuración óptima para operación', operationId);
-      
-      const operation = await this.operationRepository.findOne({
-        where: { id: operationId },
-        relations: ['station']
-      });
+    const operation = await this.operationRepository.findOne({
+      where: { id: operationId },
+      relations: ['station']
+    });
 
-      if (!operation) {
-        throw new BadRequestException('Operación no encontrada');
-      }
-
-      console.log('🔵 SchedulingService: operación encontrada:', {
-        id: operation.id,
-        name: operation.name,
-        flightNumber: operation.flightNumber,
-        passengerCount: operation.passengerCount,
-        station: operation.station?.name || 'Sin estación'
-      });
-
-      // Calcular personal recomendado basado en número de pasajeros
-      const passengerCount = operation.passengerCount || 100; // valor por defecto
-      const baseStaff = Math.ceil(passengerCount / 50); // 1 persona por cada 50 pasajeros
-      
-      // Obtener el mínimo de la estación si existe
-      let stationMinimum = 2; // valor por defecto
-      if (operation.station?.minimumStaff) {
-        stationMinimum = operation.station.minimumStaff;
-      }
-      
-      const minimumStaff = Math.max(stationMinimum, baseStaff);
-      const recommendedStaff = Math.ceil(minimumStaff * 1.2); // 20% extra para contingencias
-
-      console.log('🔵 SchedulingService: cálculo de personal:', {
-        passengerCount,
-        baseStaff,
-        stationMinimum,
-        minimumStaff,
-        recommendedStaff
-      });
-
-      // Determinar habilidades necesarias según el tipo de operación
-      const skillsNeeded = this.getRequiredSkillsForOperation(operation);
-
-      console.log('🔵 SchedulingService: habilidades necesarias:', skillsNeeded);
-
-      // Buscar personal disponible
-      const availableStaff = await this.findAvailableStaff(operationId, skillsNeeded);
-
-      console.log('🔵 SchedulingService: personal disponible encontrado:', availableStaff.length);
-
-      const result = {
-        minimumStaff,
-        recommendedStaff,
-        availableStaff,
-        skillsNeeded
-      };
-
-      console.log('✅ SchedulingService: configuración óptima calculada:', result);
-      return result;
-    } catch (error) {
-      console.error('❌ SchedulingService: error en getOptimalStaffing:', error);
-      throw new BadRequestException('Error al calcular configuración óptima: ' + error.message);
+    if (!operation) {
+      throw new BadRequestException('Operación no encontrada');
     }
+
+    // Calcular personal recomendado basado en número de pasajeros
+    const baseStaff = Math.ceil(operation.passengerCount / 50); // 1 persona por cada 50 pasajeros
+    const minimumStaff = Math.max(operation.station.minimumStaff, baseStaff);
+    const recommendedStaff = Math.ceil(minimumStaff * 1.2); // 20% extra para contingencias
+
+    // Determinar habilidades necesarias según el tipo de operación
+    const skillsNeeded = this.getRequiredSkillsForOperation(operation);
+
+    // Buscar personal disponible
+    const availableStaff = await this.findAvailableStaff(operationId, skillsNeeded);
+
+    return {
+      minimumStaff,
+      recommendedStaff,
+      availableStaff,
+      skillsNeeded
+    };
+  }
+
+  // Método mejorado para optimización de personal
+  async optimizeStaffingForOperation(operationId: number): Promise<{
+    recommendedAssignments: any[];
+    minimumStaffMet: boolean;
+    optimizationSuggestions: string[];
+    staffAvailability: any;
+  }> {
+    const operation = await this.operationRepository.findOne({
+      where: { id: operationId },
+      relations: ['station']
+    });
+
+    if (!operation) {
+      throw new BadRequestException('Operación no encontrada');
+    }
+
+    if (!operation.station) {
+      throw new BadRequestException('La operación no tiene una estación asignada');
+    }
+
+    // Calcular personal mínimo requerido basado en la operación
+    const baseStaff = this.calculateBaseStaffRequirement(operation);
+    const minimumStaff = Math.max(operation.station.minimumStaff || 0, baseStaff);
+
+    // Obtener personal disponible
+    const availableStaff = await this.userRepository.find({
+      where: {
+        stationId: operation.station.id,
+        isActive: true,
+        isAvailable: true
+      }
+    });
+
+    // Verificar si hay suficiente personal
+    const minimumStaffMet = availableStaff.length >= minimumStaff;
+    
+    const optimizationSuggestions: string[] = [];
+    
+    if (!minimumStaffMet) {
+      const shortage = minimumStaff - availableStaff.length;
+      optimizationSuggestions.push(`Faltan ${shortage} empleados para cumplir el mínimo requerido`);
+      optimizationSuggestions.push('Considera las siguientes opciones:');
+      optimizationSuggestions.push('• Contratar personal temporal o de refuerzo');
+      optimizationSuggestions.push('• Reasignar personal de otras estaciones temporalmente');
+      optimizationSuggestions.push('• Reprogramar la operación para cuando haya más personal disponible');
+      optimizationSuggestions.push('• Revisar si algún empleado puede trabajar horas extra');
+    }
+
+    // Generar recomendaciones de asignación basadas en habilidades y experiencia
+    const recommendedAssignments = this.generateStaffRecommendations(availableStaff, operation);
+
+    return {
+      recommendedAssignments,
+      minimumStaffMet,
+      optimizationSuggestions,
+      staffAvailability: {
+        available: availableStaff.length,
+        required: minimumStaff,
+        shortage: Math.max(0, minimumStaff - availableStaff.length)
+      }
+    };
+  }
+
+  private calculateBaseStaffRequirement(operation: Operation): number {
+    // Lógica base para calcular personal requerido según tipo de operación
+    let baseStaff = 2; // Mínimo por defecto
+
+    // Ajustar según el tipo de vuelo
+    if (operation.flightType === 'INTERNATIONAL') {
+      baseStaff += 2; // Vuelos internacionales requieren más personal
+    }
+
+    // Ajustar según número de pasajeros
+    if (operation.passengerCount) {
+      if (operation.passengerCount > 200) {
+        baseStaff += 2;
+      } else if (operation.passengerCount > 100) {
+        baseStaff += 1;
+      }
+    }
+
+    return baseStaff;
+  }
+
+  private generateStaffRecommendations(availableStaff: User[], operation: Operation): any[] {
+    return availableStaff.map(staff => ({
+      userId: staff.id,
+      name: staff.name,
+      role: staff.role,
+      skills: staff.skills || [],
+      certifications: staff.certifications || [],
+      recommendationScore: this.calculateRecommendationScore(staff, operation),
+      recommendedPosition: this.getRecommendedPosition(staff, operation)
+    })).sort((a, b) => b.recommendationScore - a.recommendationScore);
+  }
+
+  private calculateRecommendationScore(staff: User, operation: Operation): number {
+    let score = 0;
+
+    // Puntuación base por rol
+    switch (staff.role) {
+      case UserRole.SUPERVISOR:
+        score += 10;
+        break;
+      case UserRole.EMPLOYEE:
+        score += 5;
+        break;
+    }
+
+    // Bonificación por certificaciones relevantes
+    if (staff.certifications?.length > 0) {
+      score += staff.certifications.length * 2;
+    }
+
+    // Bonificación por habilidades
+    if (staff.skills?.length > 0) {
+      score += staff.skills.length;
+    }
+
+    return score;
+  }
+
+  private getRecommendedPosition(staff: User, operation: Operation): string {
+    if (staff.role === UserRole.SUPERVISOR) {
+      return 'Líder de operación';
+    }
+    
+    if (staff.skills?.includes('equipaje')) {
+      return 'Manejo de equipaje';
+    }
+    
+    if (staff.skills?.includes('pasajeros')) {
+      return 'Atención a pasajeros';
+    }
+    
+    return 'Soporte general';
   }
 
   // Métodos privados auxiliares
@@ -458,46 +558,23 @@ export class SchedulingService {
   private getRequiredSkillsForOperation(operation: Operation): string[] {
     const skills: string[] = [];
     
-    try {
-      // Basado en el tipo de vuelo
-      if (operation.flightType === 'INTERNATIONAL') {
-        skills.push('customs_handling', 'international_procedures');
-      } else if (operation.flightType === 'DOMESTIC') {
-        skills.push('domestic_procedures');
-      }
-      
-      // Basado en el número de pasajeros
-      const passengerCount = operation.passengerCount || 0;
-      if (passengerCount > 200) {
-        skills.push('large_aircraft_handling', 'crowd_management');
-      } else if (passengerCount > 100) {
-        skills.push('medium_aircraft_handling');
-      } else {
-        skills.push('small_aircraft_handling');
-      }
-      
-      // Basado en el tipo de operación
-      if (operation.type === 'DEPARTURE') {
-        skills.push('departure_procedures', 'baggage_loading');
-      } else if (operation.type === 'ARRIVAL') {
-        skills.push('arrival_procedures', 'baggage_unloading');
-      }
-      
-      // Habilidades generales siempre requeridas
-      skills.push('ground_handling', 'safety_procedures');
-      
-      console.log('🔵 SchedulingService: habilidades calculadas para operación:', {
-        operationId: operation.id,
-        type: operation.type,
-        flightType: operation.flightType,
-        passengerCount,
-        skills
-      });
-      
-      return skills;
-    } catch (error) {
-      console.warn('⚠️ Error calculating required skills, using default:', error.message);
-      return ['ground_handling', 'safety_procedures'];
+    // Basado en el tipo de vuelo
+    if (operation.flightType === 'INTERNATIONAL') {
+      skills.push('customs_handling', 'international_procedures');
     }
+    
+    // Basado en el número de pasajeros
+    if (operation.passengerCount > 200) {
+      skills.push('large_aircraft_handling', 'crowd_management');
+    }
+    
+    // Basado en el tipo de operación
+    if (operation.type === 'DEPARTURE') {
+      skills.push('departure_procedures', 'baggage_loading');
+    } else {
+      skills.push('arrival_procedures', 'baggage_unloading');
+    }
+    
+    return skills;
   }
 }

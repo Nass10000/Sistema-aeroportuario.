@@ -117,4 +117,17 @@ export class SchedulingController {
   async getOptimalStaffing(@Param('operationId') operationId: string) {
     return this.schedulingService.getOptimalStaffing(+operationId);
   }
+
+  @Get('optimize-staffing/:operationId')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.ADMIN)
+  async optimizeStaffing(@Param('operationId') operationId: number) {
+    try {
+      console.log('🔵 SchedulingController: optimizando personal para operación:', operationId);
+      return await this.schedulingService.optimizeStaffingForOperation(operationId);
+    } catch (error) {
+      console.error('❌ SchedulingController: error en optimizeStaffing:', error);
+      throw error;
+    }
+  }
 }
