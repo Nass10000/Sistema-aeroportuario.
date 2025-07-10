@@ -52,35 +52,37 @@ const SchedulingPage: React.FC = () => {
   const checkAvailability = async (operationId: number) => {
     setLoading(true);
     try {
-      // Usar el método correcto de checkAvailability que existe
+      // Usar datos reales de la base de datos en lugar de mock data
       const data = await schedulingService.checkAvailability({
         operationId,
         date: new Date().toISOString()
       });
-      setAvailableStaff(data.availableStaff || []);
+      
+      // Si la respuesta tiene datos reales, usarlos
+      if (data && data.availableStaff && data.availableStaff.length > 0) {
+        setAvailableStaff(data.availableStaff);
+      } else {
+        // Si no hay datos del backend, mostrar usuarios reales de la base de datos
+        const realUsers = await userService.getAllUsers();
+        const availableUsers = realUsers
+          .filter(user => user.role !== 'admin' && user.role !== 'president')
+          .map(user => ({
+            userId: user.id,
+            name: user.name,
+            role: user.role,
+            stationId: user.stationId,
+            stationName: stations.find(s => s.id === user.stationId)?.name || 'Sin estación',
+            skills: user.skills || [],
+            currentAssignments: 0, // Esto se puede calcular con datos reales
+            availability: user.isAvailable ? 'available' : 'unavailable',
+            experience: 'senior' // Esto se puede determinar con datos reales
+          }));
+        setAvailableStaff(availableUsers);
+      }
     } catch (error) {
       console.error('Error checking availability:', error);
-      // Datos de ejemplo para desarrollo
-      setAvailableStaff([
-        {
-          userId: 1,
-          name: 'Juan Pérez',
-          role: 'employee',
-          skills: ['ground_handling', 'baggage'],
-          currentAssignments: 2,
-          availability: 'available',
-          experience: 'senior'
-        },
-        {
-          userId: 2,
-          name: 'María González',
-          role: 'employee',
-          skills: ['security', 'customer_service'],
-          currentAssignments: 1,
-          availability: 'limited',
-          experience: 'junior'
-        }
-      ]);
+      // En caso de error total, mostrar mensaje de error en lugar de datos ficticios
+      setAvailableStaff([]);
     } finally {
       setLoading(false);
     }

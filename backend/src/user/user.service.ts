@@ -313,11 +313,15 @@ export class UserService {
 
   // Nuevos métodos para gestión de asignación de estaciones
   async assignStation(userId: number, stationId: number, currentUser: any): Promise<User> {
+    this.logger.log(`🔧 Iniciando asignación de estación: userId=${userId}, stationId=${stationId}, currentUser=${currentUser.email}`);
+    
     // Verificar que el usuario existe
     const user = await this.userRepository.findOneBy({ id: userId });
     if (!user) {
+      this.logger.error(`❌ Usuario con ID ${userId} no encontrado`);
       throw new NotFoundException(`Usuario con ID ${userId} no encontrado`);
     }
+    this.logger.log(`✅ Usuario encontrado: ${user.name} (${user.email})`);
 
     // Verificar que la estación existe
     const station = await this.stationRepository.findOne({
@@ -325,18 +329,33 @@ export class UserService {
       relations: ['manager']
     });
     if (!station) {
+      this.logger.error(`❌ Estación con ID ${stationId} no encontrada`);
       throw new NotFoundException(`Estación con ID ${stationId} no encontrada`);
     }
+    this.logger.log(`✅ Estación encontrada: ${station.name}`);
 
     // Verificar permisos basados en roles
-    await this.validateStationAssignmentPermissions(currentUser, user, station);
+    try {
+      await this.validateStationAssignmentPermissions(currentUser, user, station);
+      this.logger.log(`✅ Permisos validados correctamente`);
+    } catch (error) {
+      this.logger.error(`❌ Error de permisos: ${error.message}`);
+      throw error;
+    }
 
     // Verificar disponibilidad de personal mínimo antes de la asignación
-    await this.checkMinimumStaffRequirement(stationId, userId);
+    try {
+      await this.checkMinimumStaffRequirement(stationId, userId);
+      this.logger.log(`✅ Requisitos de personal mínimo validados`);
+    } catch (error) {
+      this.logger.error(`❌ Error en requisitos de personal: ${error.message}`);
+      throw error;
+    }
 
     try {
       // Asignar la estación
       await this.userRepository.update(userId, { stationId });
+      this.logger.log(`✅ Usuario actualizado en base de datos`);
 
       // Obtener el usuario actualizado
       const updatedUser = await this.userRepository.findOne({
@@ -345,16 +364,17 @@ export class UserService {
       });
 
       if (!updatedUser) {
+        this.logger.error(`❌ Usuario no encontrado después de la actualización`);
         throw new NotFoundException('Usuario no encontrado después de la actualización');
       }
 
-      this.logger.log(`Estación ${stationId} asignada al usuario ${userId} por ${currentUser.email}`);
+      this.logger.log(`✅ Estación ${stationId} asignada al usuario ${userId} por ${currentUser.email}`);
       
       // Remover la contraseña de la respuesta
       const { password, ...userResponse } = updatedUser;
       return userResponse as User;
     } catch (error) {
-      this.logger.error(`Error al asignar estación: ${error.message}`);
+      this.logger.error(`❌ Error al asignar estación: ${error.message}`);
       throw new BadRequestException('Error al asignar la estación: ' + error.message);
     }
   }
@@ -366,16 +386,9 @@ export class UserService {
       throw new NotFoundException(`Usuario con ID ${userId} no encontrado`);
     }
 
-    // Verificar permisos
-    if (currentUser.role !== UserRole.ADMIN && 
-        currentUser.role !== UserRole.MANAGER) {
-      throw new ForbiddenException('No tienes permisos para remover asignaciones de estación');
-    }
-
-    // Si es MANAGER, solo puede remover asignaciones de su propia estación
-    if (currentUser.role === UserRole.MANAGER && 
-        currentUser.stationId !== user.stationId) {
-      throw new ForbiddenException('Solo puedes remover asignaciones de tu estación');
+    // Solo ADMIN puede remover asignaciones
+    if (currentUser.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Solo los administradores pueden remover asignaciones de estación');
     }
 
     // Verificar que no se quede sin personal mínimo
@@ -406,28 +419,10 @@ export class UserService {
   }
 
   private async validateStationAssignmentPermissions(currentUser: any, targetUser: User, station: Station): Promise<void> {
-    // Solo ADMIN puede asignar cualquier estación a cualquier usuario
-    if (currentUser.role === UserRole.ADMIN) {
-      return;
+    // Solo ADMIN puede asignar estaciones
+    if (currentUser.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Solo los administradores pueden asignar estaciones');
     }
-
-    // MANAGER puede asignar solo empleados y supervisores a su estación
-    if (currentUser.role === UserRole.MANAGER) {
-      // Verificar que el usuario actual es manager de la estación
-      if (currentUser.stationId !== station.id) {
-        throw new ForbiddenException('Solo puedes asignar usuarios a tu estación');
-      }
-
-      // Verificar que el usuario objetivo es empleado o supervisor
-      if (targetUser.role !== UserRole.EMPLOYEE && targetUser.role !== UserRole.SUPERVISOR) {
-        throw new ForbiddenException('Los gerentes solo pueden asignar empleados y supervisores');
-      }
-
-      return;
-    }
-
-    // Otros roles no pueden asignar estaciones
-    throw new ForbiddenException('No tienes permisos para asignar estaciones');
   }
 
   private async checkMinimumStaffRequirement(stationId: number, userId: number, isRemoving: boolean = false): Promise<void> {

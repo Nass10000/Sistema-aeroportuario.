@@ -1,6 +1,10 @@
 import { DataSource } from 'typeorm';
 import { Station } from '../src/station/station.entity';
 import { User } from '../src/user/user.entity';
+import { Assignment } from '../src/assignment/assignment.entity';
+import { Operation } from '../src/operation/operation.entity';
+import { Notification } from '../src/notification/notification.entity';
+import { Punch } from '../src/punch/punch.entity';
 import { StationType } from '../src/station/station.entity';
 import { UserRole, EmployeeCategory } from '../src/common/enums/roles.enum';
 import * as bcrypt from 'bcryptjs';
@@ -11,9 +15,9 @@ const AppDataSource = new DataSource({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432'),
   username: process.env.DB_USERNAME || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres', 
-  database: process.env.DB_NAME || 'aeo1',
-  entities: [Station, User],
+  password: process.env.DB_PASSWORD || 'Nadar90100', 
+  database: process.env.DB_DATABASE || 'aeo_db',
+  entities: [Station, User, Assignment, Operation, Notification, Punch],
   synchronize: false,
   logging: true,
 });

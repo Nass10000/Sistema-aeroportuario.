@@ -38,7 +38,7 @@ export class SchedulingController {
 
   @Post('check-availability')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT)
+  @Roles(UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT, UserRole.ADMIN)
   async checkStaffAvailability(@Body() body: {
     userIds: number[];
     startTime: string;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { userService, stationService } from '../services/api';
+import { userService, stationService, authService } from '../services/api';
 import type { User, Station } from '../services/api';
 
 interface StationAssignmentManagerProps {
@@ -26,8 +26,18 @@ const StationAssignmentManager: React.FC<StationAssignmentManagerProps> = ({ onC
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
+    const user = authService.getCurrentUser();
+    setCurrentUser(user);
+    
+    // Solo permitir acceso a administradores
+    if (!user || user.role !== 'admin') {
+      setError('Solo los administradores pueden asignar estaciones');
+      return;
+    }
+    
     loadData();
   }, []);
 
@@ -38,8 +48,11 @@ const StationAssignmentManager: React.FC<StationAssignmentManagerProps> = ({ onC
         userService.getAllUsers(),
         stationService.getAllStations()
       ]);
-      // Filtrar usuarios para excluir presidentes
-      const filteredUsers = usersData.filter(user => user.role?.toUpperCase() !== 'PRESIDENT');
+      // Filtrar usuarios para excluir presidentes y admins
+      const filteredUsers = usersData.filter(user => 
+        user.role?.toUpperCase() !== 'PRESIDENT' && 
+        user.role?.toUpperCase() !== 'ADMIN'
+      );
       setUsers(filteredUsers);
       setStations(stationsData);
     } catch (error: any) {
@@ -95,6 +108,41 @@ const StationAssignmentManager: React.FC<StationAssignmentManagerProps> = ({ onC
       setLoading(false);
     }
   };
+
+  // Si no es admin, mostrar mensaje de error y no permitir el acceso
+  if (!currentUser || currentUser.role !== 'admin') {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-gray-900">Acceso Denegado</h2>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 text-2xl"
+            >
+              ×
+            </button>
+          </div>
+          
+          <div className="mb-4 p-3 bg-red-100 border border-red-300 text-red-700 rounded">
+            <div className="flex items-center">
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+              Solo los administradores pueden asignar estaciones a los usuarios.
+            </div>
+          </div>
+          
+          <button
+            onClick={onClose}
+            className="w-full bg-gray-500 text-white py-2 px-4 rounded hover:bg-gray-600"
+          >
+            Entendido
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const selectedUserData = users.find(u => u.id === selectedUserId);
   const selectedStationData = stations.find(s => s.id === selectedStationId);

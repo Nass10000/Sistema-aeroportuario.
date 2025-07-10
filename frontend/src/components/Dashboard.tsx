@@ -10,6 +10,7 @@ import PunchPage from '../pages/PunchPage';
 import { NotificationsPage } from '../pages/NotificationsPage';
 import ReportsPage from '../pages/ReportsPage';
 import SchedulingPage from '../pages/SchedulingPage';
+import UserStationInfo from './UserStationInfo';
 
 interface DashboardProps {
   user: User | null;
@@ -163,6 +164,9 @@ const DashboardHome: React.FC<{ user: User | null }> = ({ user }) => {
           </div>
         </div>
       </div>
+
+      {/* Información de la estación para usuarios no administradores */}
+      {user?.role !== 'admin' && <UserStationInfo user={user} />}
     </div>
   );
 };

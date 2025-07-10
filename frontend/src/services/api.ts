@@ -809,6 +809,7 @@ export const userService = {
   // Nuevos métodos para gestión de estaciones
   async assignStation(userId: number, stationId: number): Promise<User> {
     try {
+      console.log('🔧 Asignando estación:', { userId, stationId });
       const response = await apiService.post<User>(`/users/${userId}/assign-station`, {
         stationId
       });

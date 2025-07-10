@@ -120,7 +120,7 @@ export class UserController {
 
   // Nuevos endpoints para gestión de estaciones
   @Post(':id/assign-station')
-  @Roles(UserRole.ADMIN, UserRole.MANAGER) // Solo ADMIN puede asignar cualquier estación, MANAGER solo en su área
+  @Roles(UserRole.ADMIN) // Solo ADMIN puede asignar estaciones
   @ApiOperation({ summary: 'Asignar estación a usuario' })
   @ApiParam({ name: 'id', description: 'ID del usuario', type: 'number' })
   @ApiBody({ type: AssignStationDto, description: 'Datos de asignación de estación' })
@@ -133,7 +133,7 @@ export class UserController {
   }
 
   @Delete(':id/station')
-  @Roles(UserRole.ADMIN, UserRole.MANAGER) // Solo ADMIN y MANAGER pueden remover asignaciones
+  @Roles(UserRole.ADMIN) // Solo ADMIN puede remover asignaciones
   @ApiOperation({ summary: 'Remover asignación de estación' })
   @ApiParam({ name: 'id', description: 'ID del usuario', type: 'number' })
   @ApiResponse({ status: 200, description: 'Asignación de estación removida exitosamente', type: User })
