@@ -15,7 +15,7 @@ const AppDataSource = new DataSource({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432'),
   username: process.env.DB_USERNAME || 'postgres',
-  password: process.env.DB_PASSWORD || 'Nadar90100', 
+  password: process.env.DB_PASSWORD || '', // Reemplazado con variable de entorno
   database: process.env.DB_DATABASE || 'aeo_db',
   entities: [Station, User, Assignment, Operation, Notification, Punch],
   synchronize: false,
@@ -85,7 +85,7 @@ async function seedDatabase() {
     // 2. Insertar usuarios
     console.log('👥 Insertando usuarios...');
 
-    const password = await bcrypt.hash('password123', 10);
+    const password = process.env.DEFAULT_USER_PASSWORD || await bcrypt.hash('password123', 10);
 
     const users = [
       // Administradores (2)
@@ -154,9 +154,9 @@ async function seedDatabase() {
     console.log(`   - Usuarios: ${userCount}`);
     
     console.log(`\n🔑 Credenciales de acceso:`);
-    console.log(`   - Admin: carlos.admin@aeo1.com / password123`);
-    console.log(`   - Admin: ana.admin@aeo1.com / password123`);
-    console.log(`   - President: roberto.president@aeo1.com / password123`);
+    console.log(`   - Admin: carlos.admin@aeo1.com`);
+    console.log(`   - Admin: ana.admin@aeo1.com`);
+    console.log(`   - President: roberto.president@aeo1.com`);
 
   } catch (error) {
     console.error('❌ Error poblando la base de datos:', error);
