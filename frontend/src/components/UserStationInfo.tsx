@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { stationService } from '../services/api';
-import type { User, Station, UserRole } from '../services/api';
+import type { User, Station } from '../services/api';
 
 interface UserStationInfoProps {
   user: User | null;

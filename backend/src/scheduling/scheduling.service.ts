@@ -1,8 +1,9 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+import { Repository, Between, In, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
 import { Assignment, AssignmentStatus } from '../assignment/assignment.entity';
 import { User } from '../user/user.entity';
+import { Station } from '../station/station.entity';
 import { ShiftType, UserRole } from '../common/enums/roles.enum';
 import { Operation } from '../operation/operation.entity';
 import { NotificationService } from '../notification/notification.service';
@@ -10,7 +11,7 @@ import { NotificationService } from '../notification/notification.service';
 export interface ScheduleValidationResult {
   isValid: boolean;
   errors: string[];
-  warnings: string[];
+  warnings?: string[];
 }
 
 export interface StaffAvailabilityCheck {
@@ -27,6 +28,8 @@ export class SchedulingService {
     private assignmentRepository: Repository<Assignment>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(Station)
+    private stationRepository: Repository<Station>,
     @InjectRepository(Operation)
     private operationRepository: Repository<Operation>,
     private notificationService: NotificationService,
@@ -502,6 +505,170 @@ export class SchedulingService {
     }
     
     return 'Soporte general';
+  }
+
+  /**
+   * Obtiene la disponibilidad real del personal basada en operaciones actuales y estado de empleados
+   */
+  async getRealStaffAvailability(operationId?: number, date?: string): Promise<any> {
+    try {
+      const now = new Date();
+      const targetDate = date ? new Date(date) : now;
+      
+      // Obtener todos los usuarios activos
+      const allUsers = await this.userRepository.find({
+        where: { 
+          isActive: true,
+          role: In([UserRole.EMPLOYEE, UserRole.SUPERVISOR, UserRole.MANAGER])
+        }
+      });
+
+      // Obtener todas las estaciones para mapear nombres
+      const allStations = await this.stationRepository.find();
+      const stationMap = new Map(allStations.map(station => [station.id, station.name]));
+
+      // Obtener todas las operaciones activas para hoy
+      const todayStart = new Date(targetDate);
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(targetDate);
+      todayEnd.setHours(23, 59, 59, 999);
+
+      const activeOperations = await this.operationRepository.find({
+        where: {
+          scheduledTime: Between(todayStart, todayEnd),
+          status: In(['SCHEDULED', 'IN_PROGRESS'])
+        }
+      });
+
+      // Obtener asignaciones activas
+      const activeAssignments = await this.assignmentRepository.find({
+        where: {
+          startTime: LessThanOrEqual(now),
+          endTime: MoreThanOrEqual(now),
+          status: In([AssignmentStatus.SCHEDULED, AssignmentStatus.CONFIRMED, AssignmentStatus.IN_PROGRESS])
+        },
+        relations: ['user', 'operation']
+      });
+
+      // Calcular disponibilidad para cada usuario
+      const availabilityData = await Promise.all(allUsers.map(async (user) => {
+        const userAssignments = activeAssignments.filter(a => a.user.id === user.id);
+        const isCurrentlyWorking = userAssignments.length > 0;
+        
+        // Calcular horas trabajadas esta semana
+        const weekStart = new Date(targetDate);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        weekStart.setHours(0, 0, 0, 0);
+        
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        weekEnd.setHours(23, 59, 59, 999);
+
+        const weeklyAssignments = await this.assignmentRepository.find({
+          where: {
+            user: { id: user.id },
+            startTime: Between(weekStart, weekEnd),
+            status: In([AssignmentStatus.CONFIRMED, AssignmentStatus.IN_PROGRESS, AssignmentStatus.COMPLETED])
+          }
+        });
+
+        const weeklyHours = weeklyAssignments.reduce((total, assignment) => {
+          const duration = (assignment.endTime.getTime() - assignment.startTime.getTime()) / (1000 * 60 * 60);
+          return total + duration;
+        }, 0);
+
+        return {
+          userId: user.id,
+          name: user.name,
+          role: user.role,
+          stationId: user.stationId,
+          stationName: user.stationId ? (stationMap.get(user.stationId) || 'Estación desconocida') : 'Sin estación',
+          isAvailable: user.isAvailable && !isCurrentlyWorking && weeklyHours < (user.maxWeeklyHours || 40),
+          isCurrentlyWorking,
+          currentAssignments: userAssignments.map(a => ({
+            operationId: a.operation.id,
+            operationType: a.operation.type,
+            startTime: a.startTime,
+            endTime: a.endTime
+          })),
+          weeklyHours,
+          maxWeeklyHours: user.maxWeeklyHours || 40,
+          skills: user.skills || [],
+          certifications: user.certifications || [],
+          availability: user.isAvailable && !isCurrentlyWorking && weeklyHours < (user.maxWeeklyHours || 40) ? 'available' : 
+                      isCurrentlyWorking ? 'working' : 'unavailable'
+        };
+      }));
+
+      // Contar disponibilidad por estado
+      const availableCount = availabilityData.filter(u => u.availability === 'available').length;
+      const workingCount = availabilityData.filter(u => u.availability === 'working').length;
+      const unavailableCount = availabilityData.filter(u => u.availability === 'unavailable').length;
+
+      return {
+        totalStaff: allUsers.length,
+        availableStaff: availableCount,
+        workingStaff: workingCount,
+        unavailableStaff: unavailableCount,
+        activeOperations: activeOperations.length,
+        staffDetails: availabilityData,
+        optimizationSuggestions: this.generateOptimizationSuggestions(availabilityData, activeOperations)
+      };
+
+    } catch (error) {
+      console.error('❌ Error getting real staff availability:', error);
+      throw new Error('Error al obtener disponibilidad real del personal');
+    }
+  }
+
+  /**
+   * Genera sugerencias de optimización basadas en disponibilidad actual
+   */
+  private generateOptimizationSuggestions(staffData: any[], operations: any[]): any[] {
+    const suggestions: any[] = [];
+    
+    const availableStaff = staffData.filter(s => s.availability === 'available');
+    const workingStaff = staffData.filter(s => s.availability === 'working');
+    
+    if (availableStaff.length > operations.length * 2) {
+      suggestions.push({
+        type: 'efficiency',
+        message: `Hay ${availableStaff.length} empleados disponibles pero solo ${operations.length} operaciones activas. Considere redistribuir turnos.`,
+        priority: 'medium'
+      });
+    }
+
+    if (workingStaff.length > availableStaff.length * 2) {
+      suggestions.push({
+        type: 'workload',
+        message: 'Alta carga de trabajo actual. Considere activar personal de reserva.',
+        priority: 'high'
+      });
+    }
+
+    // Verificar disponibilidad por estación
+    const stationStats = staffData.reduce((acc, staff) => {
+      const stationId = staff.stationId || 'unassigned';
+      if (!acc[stationId]) {
+        acc[stationId] = { available: 0, working: 0, total: 0 };
+      }
+      acc[stationId].total++;
+      if (staff.availability === 'available') acc[stationId].available++;
+      if (staff.availability === 'working') acc[stationId].working++;
+      return acc;
+    }, {});
+
+    Object.entries(stationStats).forEach(([stationId, stats]: [string, any]) => {
+      if (stats.available === 0 && stats.working > 0) {
+        suggestions.push({
+          type: 'station_coverage',
+          message: `Estación ${stationId}: Sin personal de respaldo disponible`,
+          priority: 'high'
+        });
+      }
+    });
+
+    return suggestions;
   }
 
   // Métodos privados auxiliares

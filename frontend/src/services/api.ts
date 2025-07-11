@@ -1265,11 +1265,30 @@ export const schedulingService = {
 
   async checkAvailability(params: any): Promise<any> {
     try {
-      const response = await apiService.post<any>('/scheduling/check-availability', params);
+      // Usar el nuevo endpoint para disponibilidad real
+      const queryParams = new URLSearchParams();
+      if (params.operationId) queryParams.append('operationId', params.operationId.toString());
+      if (params.date) queryParams.append('date', params.date);
+      
+      const response = await apiService.get<any>(`/scheduling/real-availability?${queryParams.toString()}`);
       return response;
     } catch (error: any) {
       console.error('❌ Error checking availability:', error);
       throw new Error(error.response?.data?.message || 'Error al verificar disponibilidad');
+    }
+  },
+
+  async checkStaffAvailability(userIds: number[], startTime: string, endTime: string): Promise<any> {
+    try {
+      const response = await apiService.post<any>('/scheduling/check-availability', {
+        userIds,
+        startTime,
+        endTime
+      });
+      return response;
+    } catch (error: any) {
+      console.error('❌ Error checking staff availability:', error);
+      throw new Error(error.response?.data?.message || 'Error al verificar disponibilidad del personal');
     }
   },
 

@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Query, UseGuards, Request, Param } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, UseGuards, Request, Param, BadRequestException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { SchedulingService } from './scheduling.service';
@@ -36,6 +36,16 @@ export class SchedulingController {
     }
   }
 
+  @Get('real-availability')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT, UserRole.ADMIN)
+  async getRealStaffAvailability(@Query() query: {
+    operationId?: number;
+    date?: string;
+  }) {
+    return this.schedulingService.getRealStaffAvailability(query.operationId, query.date);
+  }
+
   @Post('check-availability')
   @UseGuards(RolesGuard)
   @Roles(UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.PRESIDENT, UserRole.ADMIN)
@@ -44,6 +54,11 @@ export class SchedulingController {
     startTime: string;
     endTime: string;
   }) {
+    // Validar que userIds sea un array
+    if (!Array.isArray(body.userIds)) {
+      throw new BadRequestException('userIds debe ser un array de números');
+    }
+    
     return this.schedulingService.checkStaffAvailability(
       body.userIds,
       new Date(body.startTime),
