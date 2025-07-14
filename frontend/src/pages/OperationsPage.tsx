@@ -67,6 +67,14 @@ const OperationsPage: React.FC = () => {
     console.log('🌍 Origen:', originValue, '| Destino:', destinationValue);
 
     // Construye el payload con solo los campos que el backend espera
+    const statusMap: Record<string, string> = {
+      scheduled: 'SCHEDULED',
+      boarding: 'IN_PROGRESS',
+      delayed: 'DELAYED',
+      completed: 'COMPLETED',
+      cancelled: 'CANCELLED'
+    };
+
     const operationPayload = {
       name: `Vuelo ${newOperation.flightNumber} - ${newOperation.operationType === 'arrival' ? 'Llegada' : 'Salida'}`,
       flightNumber: newOperation.flightNumber,
@@ -75,7 +83,7 @@ const OperationsPage: React.FC = () => {
       scheduledTime: new Date(newOperation.scheduledTime).toISOString(),
       passengerCount: 0, // Puedes cambiarlo si lo necesitas
       type: newOperation.operationType === 'arrival' ? 'ARRIVAL' : 'DEPARTURE',
-      status: newOperation.status as 'scheduled' | 'boarding' | 'delayed' | 'cancelled' | 'on-time' | 'departed' | 'arrived',
+      status: statusMap[newOperation.status] || 'SCHEDULED',
       stationId: parseInt(newOperation.stationId)
       // No mandes airline, aircraftType ni gate ni nada más extra
     };
