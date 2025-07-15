@@ -21,6 +21,7 @@ import { NotificationModule } from './notification/notification.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ReportsModule } from './reports/reports.module';
 import { SchedulingModule } from './scheduling/scheduling.module';
+import { ErpNextModule } from './erpnext/erpnext.module';
 import { SecurityMiddleware } from './common/middleware/security.middleware';
 import { ImprovedSecurityExceptionFilter } from './common/filters/improved-security-exception.filter';
 
@@ -54,6 +55,7 @@ import { ImprovedSecurityExceptionFilter } from './common/filters/improved-secur
     DashboardModule,
     ReportsModule,
     SchedulingModule,
+    ErpNextModule,
   ],
   providers: [
     {

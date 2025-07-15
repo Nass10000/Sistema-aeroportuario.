@@ -198,3 +198,17 @@ public/uploads/
 
 # Hot reload
 .hot-update.*
+
+# Docker Compose files with sensitive data
+docker-compose*.yml
+
+# SQL files with sensitive data
+*.sql
+
+# Environment files (already covered but adding specifics)
+backend/.env
+frontend/.env
+
+# Docker secrets and volumes
+docker-secrets/
+docker-volumes/
