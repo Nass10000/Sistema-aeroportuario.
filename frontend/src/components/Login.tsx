@@ -46,7 +46,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       
       // Si no se guardó, guardarlo manualmente (backup)
       if (!savedToken && response.access_token) {
-        console.log('🔧 Backup: Saving token manually');
+        console.log('🔧 Backup: Saving authentication manually');
         localStorage.setItem('auth_token', response.access_token);
         localStorage.setItem('user', JSON.stringify(response.user));
       }

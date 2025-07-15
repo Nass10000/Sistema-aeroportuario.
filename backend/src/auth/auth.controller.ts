@@ -98,13 +98,13 @@ export class AuthController {
         {
           name: 'Admin User',
           email: 'admin@aereo.com',
-          password: 'admin123',
+          password: process.env.DEFAULT_ADMIN_PASSWORD || 'defaultpass',
           role: UserRole.MANAGER,
         },
         {
           name: 'Manager User', 
           email: 'manager@aereo.com',
-          password: 'manager123',
+          password: process.env.DEFAULT_MANAGER_PASSWORD || 'defaultpass',
           role: UserRole.SUPERVISOR,
         },
         {

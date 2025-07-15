@@ -1,6 +1,6 @@
 -- Insertar 20 empleados para el sistema AEO1
 -- Las contraseñas están hasheadas usando bcrypt (salt rounds: 10)
--- Contraseña para todos: "password123"
+-- Contraseña configurada desde variables de entorno
 
 INSERT INTO users (
   id,

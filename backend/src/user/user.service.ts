@@ -147,19 +147,19 @@ export class UserService {
       {
         name: 'Admin User',
         email: 'admin@aereo.com',
-        password: 'Admin123!',
+        password: process.env.DEFAULT_ADMIN_PASSWORD || 'defaultpass',
         role: UserRole.MANAGER,
       },
       {
         name: 'Manager User',
         email: 'manager@aereo.com',
-        password: 'Manager123!',
+        password: process.env.DEFAULT_MANAGER_PASSWORD || 'defaultpass',
         role: UserRole.SUPERVISOR,
       },
       {
         name: 'Employee User',
         email: 'employee@aereo.com',
-        password: 'Employee123!',
+        password: process.env.DEFAULT_EMPLOYEE_PASSWORD || 'defaultpass',
         role: UserRole.EMPLOYEE,
       },
     ];

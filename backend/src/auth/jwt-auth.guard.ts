@@ -31,15 +31,11 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     });
 
     if (err || !user) {
-      console.log('🚫 JwtAuthGuard: Token validation failed:', {
-        error: err?.message,
-        info: info?.message,
-        user: user
-      });
+      console.log('🚫 JwtAuthGuard: Token validation failed');
       throw err || new UnauthorizedException();
     }
 
-    console.log('✅ JwtAuthGuard: Token validation successful for user:', user);
+    console.log('✅ JwtAuthGuard: Token validation successful');
     return user; // SOLO retorna el payload del JWT
   }
 }

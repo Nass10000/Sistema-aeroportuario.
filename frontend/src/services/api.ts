@@ -321,7 +321,7 @@ class ApiService {
     console.log(`⚡ [REPORT-API] SIN TIMEOUT - Respuesta instantánea`);
     console.log(`📡 [REPORT-API] URL: ${url}`);
     console.log(`🚀 [REPORT-API] Version: ${API_VERSION}`);
-    console.log(`🔑 [REPORT-API] Token presente: ${!!token} (longitud: ${token?.length || 0})`);
+    console.log(`🔑 [REPORT-API] Token presente: ${!!token}`);
     
     // CRÍTICO: Asegurar que el Authorization header esté presente - SIN TIMEOUT
     const extendedConfig = {

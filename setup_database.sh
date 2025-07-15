@@ -110,11 +110,11 @@ ORDER BY role;
 
 print_success "✅ Configuración de base de datos completada"
 print_warning "📋 Credenciales de acceso:"
-echo "   - Admin: carlos.admin@aeo1.com / password123"
-echo "   - Admin: ana.admin@aeo1.com / password123" 
-echo "   - President: roberto.president@aeo1.com / password123"
-echo "   - Managers: luis.manager@aeo1.com, carmen.manager@aeo1.com, etc. / password123"
-echo "   - Supervisors y Employees: ver emails en la BD / password123"
+echo "   - Admin: carlos.admin@aeo1.com / [password configured in env]"
+echo "   - Admin: ana.admin@aeo1.com / [password configured in env]" 
+echo "   - President: roberto.president@aeo1.com / [password configured in env]"
+echo "   - Managers: luis.manager@aeo1.com, carmen.manager@aeo1.com, etc. / [password configured in env]"
+echo "   - Supervisors y Employees: ver emails en la BD / [password configured in env]"
 
 echo ""
 print_status "🎯 Próximos pasos:"
