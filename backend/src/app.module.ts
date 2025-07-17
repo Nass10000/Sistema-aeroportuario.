@@ -21,7 +21,7 @@ import { NotificationModule } from './notification/notification.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ReportsModule } from './reports/reports.module';
 import { SchedulingModule } from './scheduling/scheduling.module';
-import { ErpNextModule } from './erpnext/erpnext.module';
+import { OdooModule } from './odoo/odoo.module';
 import { SecurityMiddleware } from './common/middleware/security.middleware';
 import { ImprovedSecurityExceptionFilter } from './common/filters/improved-security-exception.filter';
 
@@ -33,6 +33,7 @@ import { ImprovedSecurityExceptionFilter } from './common/filters/improved-secur
     // Configuración de TypeORM / PostgreSQL
     TypeOrmModule.forRoot({
       type: 'postgres',
+      url: process.env.DATABASE_URL,
       host: process.env.DB_HOST || 'localhost',
       port: parseInt(process.env.DB_PORT || '5432', 10),
       username: process.env.DB_USERNAME || 'postgres',
@@ -41,6 +42,7 @@ import { ImprovedSecurityExceptionFilter } from './common/filters/improved-secur
       autoLoadEntities: true,
       synchronize: process.env.NODE_ENV !== 'production',
       logging: process.env.NODE_ENV === 'development',
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
     }),
     TypeOrmModule.forFeature([User, Station, Operation, Assignment, Punch, Notification]),
 
@@ -55,7 +57,7 @@ import { ImprovedSecurityExceptionFilter } from './common/filters/improved-secur
     DashboardModule,
     ReportsModule,
     SchedulingModule,
-    ErpNextModule,
+    OdooModule,
   ],
   providers: [
     {

@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: aeo-backend
+    env: docker
+    plan: starter
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: aeo-database
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ODOO_URL
+        value: http://your-odoo-instance.com:8069
+      - key: ODOO_DATABASE
+        value: aeo_odoo
+      - key: ODOO_USERNAME
+        value: admin@aeo1.com
+      - key: ODOO_PASSWORD
+        value: admin123
+
+databases:
+  - name: aeo-database
+    databaseName: aeo_db
+    user: aeo_user
+    plan: starter
