@@ -1,21 +1,32 @@
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Copiar archivos de configuración
 COPY package*.json ./
-RUN npm install
+COPY tsconfig*.json ./
 
+# Instalar dependencias
+RUN npm ci --only=production=false
+
+# Copiar código fuente
 COPY . .
+
+# Construir la aplicación
 RUN npm run build
 
-FROM node:18-alpine
+# Etapa de producción
+FROM node:20-alpine
 
 WORKDIR /app
 
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package*.json ./
+# Copiar solo las dependencias de producción
+COPY package*.json ./
+RUN npm ci --only=production && npm cache clean --force
 
-EXPOSE ${PORT:-3001}
+# Copiar la aplicación construida
+COPY --from=builder /app/dist ./dist
+
+EXPOSE 3001
 
 CMD ["node", "dist/main.js"]
