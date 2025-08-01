@@ -6,12 +6,12 @@ import { UserService } from './user/user.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  
+
   // Health check endpoint
   app.use('/health', (req, res) => {
     res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
   });
-  
+
   // Validación global
   app.useGlobalPipes(
     new ValidationPipe({
@@ -28,13 +28,13 @@ async function bootstrap() {
     .setVersion('1.0')
     .addBearerAuth()
     .build();
-  
+
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
-  // CORS para frontend privado (permitir todos los puertos de desarrollo)
+  // CORS para Render
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174'],
+    origin: 'https://sistema-aeroportuario-1.onrender.com',
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -44,7 +44,7 @@ async function bootstrap() {
   try {
     const userService = app.get(UserService);
     await userService.initializeTestUsers();
-    
+
     console.log('✅ Test data initialization completed');
   } catch (error) {
     console.warn('⚠️ Test data initialization failed:', error.message);
