@@ -42,7 +42,7 @@ import { ImprovedSecurityExceptionFilter } from './common/filters/improved-secur
       autoLoadEntities: true,
       synchronize: process.env.NODE_ENV !== 'production',
       logging: process.env.NODE_ENV === 'development',
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      ssl: { rejectUnauthorized: false },
     }),
     TypeOrmModule.forFeature([User, Station, Operation, Assignment, Punch, Notification]),
 
